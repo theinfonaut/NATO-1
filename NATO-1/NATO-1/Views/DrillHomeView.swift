@@ -3,12 +3,17 @@
 //  NATO-1
 //
 
+import Combine
 import SwiftUI
 
 struct DrillHomeView: View {
     @ObservedObject var appState = AppState.shared
     @State private var showingDrillSession = false
     @State private var showingEncodePractice = false
+    @State private var currentTime = Date()
+
+    // Timer to refresh the view every second
+    private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
         NavigationStack {
@@ -27,6 +32,12 @@ struct DrillHomeView: View {
             }
             .padding()
             .navigationTitle("Drill")
+            .onReceive(timer) { time in
+                currentTime = time
+            }
+            .onAppear {
+                currentTime = Date()
+            }
             .fullScreenCover(isPresented: $showingDrillSession) {
                 NavigationStack {
                     DrillSessionView()
@@ -110,8 +121,8 @@ struct DrillHomeView: View {
                     Text("Next review")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Text(nextReview, style: .relative)
-                        .font(.headline)
+                    Text(timeUntil(nextReview))
+                        .font(.system(.headline, design: .monospaced))
                 }
             }
 
@@ -138,6 +149,28 @@ struct DrillHomeView: View {
             }
             .padding(.horizontal)
             .padding(.top, 16)
+        }
+    }
+
+    // MARK: - Helpers
+
+    private func timeUntil(_ date: Date) -> String {
+        let seconds = max(0, Int(date.timeIntervalSince(currentTime)))
+        if seconds == 0 {
+            return "Now"
+        }
+        let minutes = seconds / 60
+        let hours = minutes / 60
+        let days = hours / 24
+
+        if days > 0 {
+            return "\(days)d \(hours % 24)h"
+        } else if hours > 0 {
+            return "\(hours)h \(minutes % 60)m"
+        } else if minutes > 0 {
+            return "\(minutes)m \(seconds % 60)s"
+        } else {
+            return "\(seconds)s"
         }
     }
 }

@@ -31,10 +31,12 @@ final class LearningSessionViewModel: ObservableObject {
     private var quizDeck: [Letter] = []
     private var quizResurfaceQueue: [Letter] = []
     private var quizFirstPassComplete = false
+    private var quizCurrentCardHadWrongAnswer = false
 
     private var encodeDeck: [EncodeWord] = []
     private var encodeResurfaceQueue: [EncodeWord] = []
     private var encodeFirstPassComplete = false
+    private var encodeCurrentCardHadWrongAnswer = false
 
     // MARK: - Init
 
@@ -71,11 +73,14 @@ final class LearningSessionViewModel: ObservableObject {
         quizDeck = batch.letters.shuffled()
         quizResurfaceQueue = []
         quizFirstPassComplete = false
+        quizCurrentCardHadWrongAnswer = false
         currentStep = .quiz
         serveNextQuizCard()
     }
 
     private func serveNextQuizCard() {
+        quizCurrentCardHadWrongAnswer = false
+
         if let letter = quizDeck.first {
             currentQuizLetter = letter
             quizInput = ""
@@ -86,11 +91,6 @@ final class LearningSessionViewModel: ObservableObject {
             quizDeck = quizResurfaceQueue
             quizResurfaceQueue = []
             serveNextQuizCard()
-        } else if let letter = quizDeck.first {
-            // Serving from what was the resurface queue
-            currentQuizLetter = letter
-            quizInput = ""
-            quizShowingCorrectAnswer = false
         } else {
             // Quiz complete
             startEncode()
@@ -104,24 +104,22 @@ final class LearningSessionViewModel: ObservableObject {
             .lowercased() == letter.natoWord.lowercased()
 
         if correct {
+            // Add to resurface queue if had wrong answer (only during first pass)
+            if !quizFirstPassComplete && quizCurrentCardHadWrongAnswer {
+                quizResurfaceQueue.append(letter)
+            }
             quizDeck.removeFirst()
             serveNextQuizCard()
         } else {
-            // Show correct answer briefly
+            // Mark that this card had a wrong answer
+            quizCurrentCardHadWrongAnswer = true
+            // Show correct answer
             quizShowingCorrectAnswer = true
-
-            // Add to resurface queue (only during first pass)
-            if !quizFirstPassComplete && !quizResurfaceQueue.contains(where: { $0.id == letter.id }) {
-                quizResurfaceQueue.append(letter)
-            }
-
-            // Move to back of deck
-            quizDeck.removeFirst()
-            quizDeck.append(letter)
         }
     }
 
     func dismissQuizCorrectAnswer() {
+        // Stay on the same card, just clear input for retry
         quizShowingCorrectAnswer = false
         quizInput = ""
     }
@@ -136,11 +134,14 @@ final class LearningSessionViewModel: ObservableObject {
         encodeDeck = Array(batch.encodeWords.shuffled())
         encodeResurfaceQueue = []
         encodeFirstPassComplete = false
+        encodeCurrentCardHadWrongAnswer = false
         currentStep = .encode
         serveNextEncodeCard()
     }
 
     private func serveNextEncodeCard() {
+        encodeCurrentCardHadWrongAnswer = false
+
         if let word = encodeDeck.first {
             currentEncodeWord = word
             encodeInput = ""
@@ -151,10 +152,6 @@ final class LearningSessionViewModel: ObservableObject {
             encodeDeck = encodeResurfaceQueue
             encodeResurfaceQueue = []
             serveNextEncodeCard()
-        } else if let word = encodeDeck.first {
-            currentEncodeWord = word
-            encodeInput = ""
-            encodeShowingHint = false
         } else {
             // Encode complete
             completeSession()
@@ -167,24 +164,22 @@ final class LearningSessionViewModel: ObservableObject {
         let correct = normalizeEncodeAnswer(encodeInput) == normalizeEncodeAnswer(word.natoSpelling.joined(separator: " "))
 
         if correct {
+            // Add to resurface queue if had wrong answer (only during first pass)
+            if !encodeFirstPassComplete && encodeCurrentCardHadWrongAnswer {
+                encodeResurfaceQueue.append(word)
+            }
             encodeDeck.removeFirst()
             serveNextEncodeCard()
         } else {
-            // Show hint briefly
+            // Mark that this card had a wrong answer
+            encodeCurrentCardHadWrongAnswer = true
+            // Show hint
             encodeShowingHint = true
-
-            // Add to resurface queue (only during first pass)
-            if !encodeFirstPassComplete && !encodeResurfaceQueue.contains(where: { $0.id == word.id }) {
-                encodeResurfaceQueue.append(word)
-            }
-
-            // Move to back of deck
-            encodeDeck.removeFirst()
-            encodeDeck.append(word)
         }
     }
 
     func dismissEncodeHint() {
+        // Stay on the same card, just clear input for retry
         encodeShowingHint = false
         encodeInput = ""
     }

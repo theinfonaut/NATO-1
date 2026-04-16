@@ -10,10 +10,12 @@ enum AppConstants {
     // MARK: - SRS Intervals
 
     enum SRS {
-        static let tier1Interval: TimeInterval = 4 * 60 * 60        // 4 hours
-        static let tier2Interval: TimeInterval = 24 * 60 * 60       // 1 day
-        static let tier3Interval: TimeInterval = 3 * 24 * 60 * 60   // 3 days
-        static let tier4Interval: TimeInterval = 7 * 24 * 60 * 60   // 7 days
+        // TODO: Restore production values before release
+        // Production: 4 hours, 1 day, 3 days, 7 days
+        static let tier1Interval: TimeInterval = 60        // 1 minute (testing)
+        static let tier2Interval: TimeInterval = 60        // 1 minute (testing)
+        static let tier3Interval: TimeInterval = 60        // 1 minute (testing)
+        static let tier4Interval: TimeInterval = 60        // 1 minute (testing)
 
         static func interval(for tier: Int) -> TimeInterval {
             switch tier {
