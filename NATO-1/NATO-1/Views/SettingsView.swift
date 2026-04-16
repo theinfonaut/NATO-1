@@ -10,7 +10,8 @@ struct SettingsView: View {
     @ObservedObject var appState = AppState.shared
 
     @State private var showingResetAlert = false
-    @State private var showingJumpAlert = false
+    @State private var showingJumpDrillAlert = false
+    @State private var showingJumpMasteryAlert = false
 
     var body: some View {
         NavigationStack {
@@ -73,11 +74,21 @@ struct SettingsView: View {
 
                     // Jump to Drilling
                     Button {
-                        showingJumpAlert = true
+                        showingJumpDrillAlert = true
                     } label: {
                         HStack {
                             Image(systemName: "forward.fill")
                             Text("Jump to Drilling")
+                        }
+                    }
+
+                    // Jump to Mastery
+                    Button {
+                        showingJumpMasteryAlert = true
+                    } label: {
+                        HStack {
+                            Image(systemName: "star.fill")
+                            Text("Jump to Mastery")
                         }
                     }
                 } header: {
@@ -111,7 +122,7 @@ struct SettingsView: View {
             } message: {
                 Text("This will erase all your progress and return the app to a fresh install state. This cannot be undone.")
             }
-            .alert("Jump to Drilling?", isPresented: $showingJumpAlert) {
+            .alert("Jump to Drilling?", isPresented: $showingJumpDrillAlert) {
                 Button("Cancel", role: .cancel) { }
                 Button("Jump") {
                     appState.debugJumpToDrilling()
@@ -119,6 +130,15 @@ struct SettingsView: View {
                 }
             } message: {
                 Text("This will mark Batch 1 (A B C D) as complete and add those letters to the drill queue, due immediately.")
+            }
+            .alert("Jump to Mastery?", isPresented: $showingJumpMasteryAlert) {
+                Button("Cancel", role: .cancel) { }
+                Button("Jump") {
+                    appState.debugJumpToMastery()
+                    dismiss()
+                }
+            } message: {
+                Text("This will set A–Y to Mastered and Z to Confident (due now). Answer Z correctly to trigger the mastery celebration.")
             }
         }
     }

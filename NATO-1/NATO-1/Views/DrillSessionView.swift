@@ -7,10 +7,49 @@ import SwiftUI
 
 struct DrillSessionView: View {
     @StateObject private var viewModel = DrillSessionViewModel()
+    @ObservedObject private var appState = AppState.shared
     @Environment(\.dismiss) private var dismiss
     @FocusState private var inputFocused: Bool
 
     var body: some View {
+        VStack(spacing: 0) {
+            if viewModel.isSessionComplete && appState.shouldShowMasteryCelebration {
+                // Mastery celebration
+                MasteryCelebrationView(onDismiss: { dismiss() })
+            } else if viewModel.isSessionComplete {
+                // Regular completion
+                sessionCompleteView
+            } else {
+                // Active session
+                activeSessionView
+            }
+        }
+        .navigationBarBackButtonHidden(true)
+        .toolbar {
+            if !viewModel.isSessionComplete {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Exit") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Text("\(viewModel.cardsRemaining) left")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .onAppear {
+            inputFocused = true
+        }
+        .onChange(of: viewModel.currentCard) { _, _ in
+            inputFocused = true
+        }
+    }
+
+    // MARK: - Active Session
+
+    private var activeSessionView: some View {
         VStack(spacing: 0) {
             // Progress bar
             GeometryReader { geometry in
@@ -24,9 +63,7 @@ struct DrillSessionView: View {
             }
             .frame(height: 4)
 
-            if viewModel.isSessionComplete {
-                sessionCompleteView
-            } else if let card = viewModel.currentCard {
+            if let card = viewModel.currentCard {
                 switch card {
                 case .letter:
                     letterCardView
@@ -34,25 +71,6 @@ struct DrillSessionView: View {
                     encodeCardView
                 }
             }
-        }
-        .navigationBarBackButtonHidden(true)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                Button("Exit") {
-                    dismiss()
-                }
-            }
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Text("\(viewModel.cardsRemaining) left")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .onAppear {
-            inputFocused = true
-        }
-        .onChange(of: viewModel.currentCard) { _, _ in
-            inputFocused = true
         }
     }
 

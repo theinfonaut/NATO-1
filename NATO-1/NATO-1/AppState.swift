@@ -110,6 +110,7 @@ final class AppState: ObservableObject {
         persistence.resetAll()
         batchProgress = BatchProgress()
         letterProgress = [:]
+        resetMasteryFlag()
     }
 
     /// Debug: Reset everything, then mark Batch 1 complete with letters due immediately
@@ -137,5 +138,58 @@ final class AppState: ObservableObject {
             letterProgress[progress.letterId] = progress
         }
         persistence.saveLetterProgress(Array(letterProgress.values))
+    }
+
+    /// Debug: Reset everything, set A-Y to Mastered, Z to Confident due now
+    func debugJumpToMastery() {
+        // First, wipe all progress
+        persistence.resetAll()
+        batchProgress = BatchProgress()
+        letterProgress = [:]
+
+        // Mark all batches as complete
+        for i in 0..<NATOData.batches.count {
+            batchProgress.completedBatchIndices.insert(i)
+        }
+        batchProgress.currentLearningBatchIndex = nil
+        persistence.saveBatchProgress(batchProgress)
+
+        // Set all letters to appropriate tiers
+        let now = Date()
+        let weekFromNow = now.addingTimeInterval(AppConstants.SRS.tier4Interval)
+
+        for letter in NATOData.allLetters {
+            let letterId = String(letter.id)
+            let isZ = letter.id == "Z"
+
+            let progress = LetterProgress(
+                letterId: letterId,
+                tier: isZ ? .confident : .mastered,
+                nextReviewDate: isZ ? now : weekFromNow
+            )
+            letterProgress[letterId] = progress
+        }
+        persistence.saveLetterProgress(Array(letterProgress.values))
+    }
+
+    // MARK: - Mastery
+
+    private static let masteryAchievedKey = "nato1.masteryAchieved"
+
+    var hasMasteryBeenAchieved: Bool {
+        get { UserDefaults.standard.bool(forKey: Self.masteryAchievedKey) }
+        set { UserDefaults.standard.set(newValue, forKey: Self.masteryAchievedKey) }
+    }
+
+    var shouldShowMasteryCelebration: Bool {
+        allLettersMastered && !hasMasteryBeenAchieved
+    }
+
+    func markMasteryAchieved() {
+        hasMasteryBeenAchieved = true
+    }
+
+    func resetMasteryFlag() {
+        UserDefaults.standard.removeObject(forKey: Self.masteryAchievedKey)
     }
 }
