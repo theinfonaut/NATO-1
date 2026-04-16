@@ -17,7 +17,15 @@ struct DrillHomeView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 24) {
+            VStack(spacing: 0) {
+                // Subtitle
+                Text("Drill at increasing intervals to encode it into permanent memory.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+                    .padding(.bottom, 24)
+
                 Spacer()
 
                 if appState.dueLetterCount > 0 {

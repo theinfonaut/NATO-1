@@ -15,6 +15,7 @@ final class LearningSessionViewModel: ObservableObject {
 
     @Published private(set) var currentStep: LearningStep = .meet(currentIndex: 0)
     @Published private(set) var isSessionComplete = false
+    @Published private(set) var lastWrongAnswer = ""  // What the user typed
 
     // Quiz state
     @Published private(set) var currentQuizLetter: Letter?
@@ -38,10 +39,72 @@ final class LearningSessionViewModel: ObservableObject {
     private var encodeFirstPassComplete = false
     private var encodeCurrentCardHadWrongAnswer = false
 
+    private let persistence = PersistenceManager.shared
+
     // MARK: - Init
 
+    /// Start a new session for the given batch
     init(batch: Batch) {
         self.batch = batch
+        saveState()
+    }
+
+    /// Resume a session from saved state
+    init?(savedState: LearningSessionState) {
+        guard let batch = NATOData.batch(at: savedState.batchIndex) else { return nil }
+        self.batch = batch
+        restoreState(from: savedState)
+    }
+
+    // MARK: - State Persistence
+
+    private func saveState() {
+        let state = LearningSessionState(
+            batchIndex: batch.id,
+            currentStep: currentStep,
+            quizDeck: quizDeck.map { String($0.id) },
+            quizResurfaceQueue: quizResurfaceQueue.map { String($0.id) },
+            quizFirstPassComplete: quizFirstPassComplete,
+            quizCurrentCardHadWrongAnswer: quizCurrentCardHadWrongAnswer,
+            encodeDeck: encodeDeck.map { $0.word },
+            encodeResurfaceQueue: encodeResurfaceQueue.map { $0.word },
+            encodeFirstPassComplete: encodeFirstPassComplete,
+            encodeCurrentCardHadWrongAnswer: encodeCurrentCardHadWrongAnswer
+        )
+        persistence.saveLearningSession(state)
+    }
+
+    private func restoreState(from state: LearningSessionState) {
+        currentStep = state.currentStep
+
+        // Restore quiz state
+        quizDeck = state.quizDeck.compactMap { NATOData.letter(forId: $0) }
+        quizResurfaceQueue = state.quizResurfaceQueue.compactMap { NATOData.letter(forId: $0) }
+        quizFirstPassComplete = state.quizFirstPassComplete
+        quizCurrentCardHadWrongAnswer = state.quizCurrentCardHadWrongAnswer
+
+        // Restore encode state
+        let allEncodeWords = NATOData.availableEncodeWords(forCompletedBatches: Set(0...batch.id))
+        encodeDeck = state.encodeDeck.compactMap { word in allEncodeWords.first { $0.word == word } }
+        encodeResurfaceQueue = state.encodeResurfaceQueue.compactMap { word in allEncodeWords.first { $0.word == word } }
+        encodeFirstPassComplete = state.encodeFirstPassComplete
+        encodeCurrentCardHadWrongAnswer = state.encodeCurrentCardHadWrongAnswer
+
+        // Set current card based on step
+        switch currentStep {
+        case .meet:
+            break
+        case .quiz:
+            currentQuizLetter = quizDeck.first
+        case .encode:
+            currentEncodeWord = encodeDeck.first
+        case .complete:
+            isSessionComplete = true
+        }
+    }
+
+    private func clearSavedState() {
+        persistence.clearLearningSession()
     }
 
     // MARK: - Meet Step
@@ -62,6 +125,7 @@ final class LearningSessionViewModel: ObservableObject {
         let nextIndex = index + 1
         if nextIndex < batch.letters.count {
             currentStep = .meet(currentIndex: nextIndex)
+            saveState()
         } else {
             startQuiz()
         }
@@ -75,6 +139,7 @@ final class LearningSessionViewModel: ObservableObject {
         quizFirstPassComplete = false
         quizCurrentCardHadWrongAnswer = false
         currentStep = .quiz
+        saveState()
         serveNextQuizCard()
     }
 
@@ -85,6 +150,7 @@ final class LearningSessionViewModel: ObservableObject {
             currentQuizLetter = letter
             quizInput = ""
             quizShowingCorrectAnswer = false
+            saveState()
         } else if !quizFirstPassComplete {
             // First pass done, move resurface queue to deck
             quizFirstPassComplete = true
@@ -113,8 +179,11 @@ final class LearningSessionViewModel: ObservableObject {
         } else {
             // Mark that this card had a wrong answer
             quizCurrentCardHadWrongAnswer = true
+            // Store what the user typed
+            lastWrongAnswer = quizInput
             // Show correct answer
             quizShowingCorrectAnswer = true
+            saveState()
         }
     }
 
@@ -136,6 +205,7 @@ final class LearningSessionViewModel: ObservableObject {
         encodeFirstPassComplete = false
         encodeCurrentCardHadWrongAnswer = false
         currentStep = .encode
+        saveState()
         serveNextEncodeCard()
     }
 
@@ -146,6 +216,7 @@ final class LearningSessionViewModel: ObservableObject {
             currentEncodeWord = word
             encodeInput = ""
             encodeShowingHint = false
+            saveState()
         } else if !encodeFirstPassComplete {
             // First pass done, move resurface queue to deck
             encodeFirstPassComplete = true
@@ -173,8 +244,11 @@ final class LearningSessionViewModel: ObservableObject {
         } else {
             // Mark that this card had a wrong answer
             encodeCurrentCardHadWrongAnswer = true
+            // Store what the user typed
+            lastWrongAnswer = encodeInput
             // Show hint
             encodeShowingHint = true
+            saveState()
         }
     }
 
@@ -206,6 +280,12 @@ final class LearningSessionViewModel: ObservableObject {
         currentStep = .complete
         AppState.shared.completeBatch(batch.id)
         isSessionComplete = true
+        clearSavedState()
+    }
+
+    /// Called when user exits session early
+    func abandonSession() {
+        clearSavedState()
     }
 
     var nextReviewDate: Date {

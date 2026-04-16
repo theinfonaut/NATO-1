@@ -51,6 +51,9 @@ struct DrillSessionView: View {
         .onAppear {
             inputFocused = true
         }
+        .onChange(of: viewModel.currentCard) { _, _ in
+            inputFocused = true
+        }
     }
 
     private var progress: Double {
@@ -67,22 +70,27 @@ struct DrillSessionView: View {
             if let letter = viewModel.currentLetter {
                 // Letter prompt
                 Text(String(letter.character))
-                    .font(.system(size: 120, weight: .bold, design: .monospaced))
+                    .font(.system(size: 100, weight: .bold, design: .monospaced))
 
                 if viewModel.showingCorrectAnswer {
-                    // Show correct answer
-                    Text(letter.natoWord)
-                        .font(.title)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.red)
-                        .padding(.top, 24)
+                    // Show what user typed and correct answer
+                    VStack(spacing: 8) {
+                        Text("You typed: \(viewModel.lastWrongAnswer)")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        Text("Correct: \(letter.natoWord)")
+                            .font(.title2)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.red)
+                    }
+                    .padding(.top, 20)
 
-                    Button("Continue") {
+                    Button("Try Again") {
                         viewModel.dismissCorrectAnswer()
                         inputFocused = true
                     }
                     .buttonStyle(.bordered)
-                    .padding(.top, 24)
+                    .padding(.top, 20)
                 } else {
                     // Input field
                     TextField("NATO word", text: $viewModel.input)
@@ -92,7 +100,7 @@ struct DrillSessionView: View {
                         .autocorrectionDisabled()
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 48)
-                        .padding(.top, 32)
+                        .padding(.top, 24)
                         .focused($inputFocused)
                         .onSubmit {
                             viewModel.submitLetterAnswer()
@@ -102,7 +110,7 @@ struct DrillSessionView: View {
                         viewModel.submitLetterAnswer()
                     }
                     .buttonStyle(.borderedProminent)
-                    .padding(.top, 16)
+                    .padding(.top, 12)
                     .disabled(viewModel.input.isEmpty)
                 }
             }
@@ -120,23 +128,29 @@ struct DrillSessionView: View {
             if let word = viewModel.currentEncodeWord {
                 // Word prompt
                 Text(word.word)
-                    .font(.system(size: 48, weight: .bold, design: .monospaced))
+                    .font(.system(size: 40, weight: .bold, design: .monospaced))
 
                 if viewModel.showingEncodeHint {
-                    // Show correct spelling
-                    Text(word.formattedSpelling)
-                        .font(.body)
-                        .foregroundStyle(.red)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 32)
-                        .padding(.top, 24)
+                    // Show what user typed and correct spelling
+                    VStack(spacing: 8) {
+                        Text("You typed: \(viewModel.lastWrongAnswer)")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        Text("Correct: \(word.formattedSpelling)")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.red)
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding(.horizontal, 32)
+                    .padding(.top, 20)
 
-                    Button("Continue") {
+                    Button("Try Again") {
                         viewModel.dismissEncodeHint()
                         inputFocused = true
                     }
                     .buttonStyle(.bordered)
-                    .padding(.top, 24)
+                    .padding(.top, 20)
                 } else {
                     // Instructions
                     Text("Spell using NATO words")
@@ -152,7 +166,7 @@ struct DrillSessionView: View {
                         .autocorrectionDisabled()
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 32)
-                        .padding(.top, 24)
+                        .padding(.top, 20)
                         .focused($inputFocused)
                         .onSubmit {
                             viewModel.submitEncodeAnswer()
@@ -162,7 +176,7 @@ struct DrillSessionView: View {
                         viewModel.submitEncodeAnswer()
                     }
                     .buttonStyle(.borderedProminent)
-                    .padding(.top, 16)
+                    .padding(.top, 12)
                     .disabled(viewModel.input.isEmpty)
                 }
             }
@@ -184,7 +198,7 @@ struct DrillSessionView: View {
             VStack(spacing: 4) {
                 Text("\(viewModel.completedCards)")
                     .font(.system(size: 48, weight: .bold, design: .monospaced))
-                Text("cards reviewed")
+                Text("cards drilled")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

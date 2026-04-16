@@ -11,18 +11,94 @@ struct CodebookView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 100))], spacing: 12) {
-                    ForEach(NATOData.allLetters) { letter in
-                        LetterCard(
-                            letter: letter,
-                            tier: appState.tier(for: String(letter.id)),
-                            isUnlocked: appState.letterProgress[String(letter.id)] != nil
-                        )
+                VStack(spacing: 20) {
+                    // Progress summary
+                    progressSummary
+
+                    // Letter grid
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 100))], spacing: 12) {
+                        ForEach(NATOData.allLetters) { letter in
+                            LetterCard(
+                                letter: letter,
+                                tier: appState.tier(for: String(letter.id)),
+                                isUnlocked: appState.letterProgress[String(letter.id)] != nil
+                            )
+                        }
                     }
+
+                    // Tier legend
+                    tierLegend
+                        .padding(.top, 8)
                 }
                 .padding()
             }
             .navigationTitle("Codebook")
+        }
+    }
+
+    // MARK: - Progress Summary
+
+    private var progressSummary: some View {
+        HStack(spacing: 16) {
+            ForEach(SRSTier.allCases, id: \.rawValue) { tier in
+                VStack(spacing: 4) {
+                    Text("\(tierCount(for: tier))")
+                        .font(.system(.title2, design: .monospaced))
+                        .fontWeight(.bold)
+                        .foregroundStyle(tierColor(for: tier))
+                    Text(tier.name)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .padding()
+        .background(Color.primary.opacity(0.05))
+        .cornerRadius(12)
+    }
+
+    private func tierCount(for tier: SRSTier) -> Int {
+        appState.letterProgress.values.filter { $0.tier == tier }.count
+    }
+
+    private func tierColor(for tier: SRSTier) -> Color {
+        switch tier {
+        case .learning: return .orange
+        case .familiar: return .yellow
+        case .confident: return .blue
+        case .mastered: return .green
+        }
+    }
+
+    // MARK: - Tier Legend
+
+    private var tierLegend: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("TIER PROGRESSION")
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundStyle(.secondary)
+
+            VStack(alignment: .leading, spacing: 8) {
+                legendRow(tier: .learning, description: "Just learned — drill again in 4 hours")
+                legendRow(tier: .familiar, description: "Getting it — drill again in 1 day")
+                legendRow(tier: .confident, description: "Solid recall — drill again in 3 days")
+                legendRow(tier: .mastered, description: "Locked in — drill again in 7 days")
+            }
+        }
+        .padding()
+        .background(Color.primary.opacity(0.03))
+        .cornerRadius(12)
+    }
+
+    private func legendRow(tier: SRSTier, description: String) -> some View {
+        HStack(spacing: 12) {
+            TierBadge(tier: tier)
+                .frame(width: 80, alignment: .leading)
+            Text(description)
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 }

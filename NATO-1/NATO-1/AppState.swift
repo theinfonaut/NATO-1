@@ -104,11 +104,38 @@ final class AppState: ObservableObject {
         letterProgress[letterId]?.tier
     }
 
-    // MARK: - Reset (for testing)
+    // MARK: - Debug Actions
 
     func resetAll() {
         persistence.resetAll()
         batchProgress = BatchProgress()
         letterProgress = [:]
+    }
+
+    /// Debug: Reset everything, then mark Batch 1 complete with letters due immediately
+    func debugJumpToDrilling() {
+        // First, wipe all progress
+        persistence.resetAll()
+        batchProgress = BatchProgress()
+        letterProgress = [:]
+
+        // Mark Batch 1 as complete
+        batchProgress.completedBatchIndices.insert(0)
+        batchProgress.currentLearningBatchIndex = nil
+        persistence.saveBatchProgress(batchProgress)
+
+        // Add A, B, C, D to SRS at Tier 1, due now
+        let batch = NATOData.batches[0]
+        let now = Date()
+
+        for letter in batch.letters {
+            let progress = LetterProgress(
+                letterId: String(letter.id),
+                tier: .learning,
+                nextReviewDate: now  // Due immediately
+            )
+            letterProgress[progress.letterId] = progress
+        }
+        persistence.saveLetterProgress(Array(letterProgress.values))
     }
 }

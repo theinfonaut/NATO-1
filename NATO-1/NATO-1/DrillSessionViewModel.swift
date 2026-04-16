@@ -16,6 +16,7 @@ final class DrillSessionViewModel: ObservableObject {
     @Published private(set) var isSessionComplete = false
     @Published private(set) var showingCorrectAnswer = false
     @Published private(set) var showingEncodeHint = false
+    @Published private(set) var lastWrongAnswer = ""  // What the user typed
     @Published var input = ""
 
     // Session stats
@@ -25,8 +26,13 @@ final class DrillSessionViewModel: ObservableObject {
     // MARK: - Internal State
 
     private var letterQueue: [String] = []
-    private var resurfaceQueue: [String] = []
+    private var letterResurfaceQueue: [String] = []
+    private var letterCurrentCardHadWrongAnswer = false
+
     private var encodeQueue: [EncodeWord] = []
+    private var encodeResurfaceQueue: [EncodeWord] = []
+    private var encodeCurrentCardHadWrongAnswer = false
+
     private var lettersAnsweredCount: Int = 0
     private var penalizedLetters: Set<String> = []
 
@@ -42,7 +48,8 @@ final class DrillSessionViewModel: ObservableObject {
         // Get all due letters
         let dueLetters = appState.dueLetters.map { $0.letterId }
         letterQueue = dueLetters.shuffled()
-        resurfaceQueue = []
+        letterResurfaceQueue = []
+        letterCurrentCardHadWrongAnswer = false
         penalizedLetters = []
         lettersAnsweredCount = 0
 
@@ -50,6 +57,8 @@ final class DrillSessionViewModel: ObservableObject {
         let encodeCount = max(1, dueLetters.count / AppConstants.Drill.encodeCardFrequency)
         let completedBatches = appState.batchProgress.completedBatchIndices
         encodeQueue = NATOData.randomEncodeWords(count: encodeCount, fromCompletedBatches: completedBatches)
+        encodeResurfaceQueue = []
+        encodeCurrentCardHadWrongAnswer = false
 
         totalCards = letterQueue.count + encodeQueue.count
         completedCards = 0
@@ -60,7 +69,10 @@ final class DrillSessionViewModel: ObservableObject {
     // MARK: - Card Serving
 
     private func serveNextCard() {
-        // Check if it's time for an encode card
+        letterCurrentCardHadWrongAnswer = false
+        encodeCurrentCardHadWrongAnswer = false
+
+        // Check if it's time for an encode card (from main queue)
         if lettersAnsweredCount > 0 &&
            lettersAnsweredCount % AppConstants.Drill.encodeCardFrequency == 0 &&
            !encodeQueue.isEmpty {
@@ -80,9 +92,27 @@ final class DrillSessionViewModel: ObservableObject {
             return
         }
 
-        // Serve from resurface queue
-        if let letterId = resurfaceQueue.first {
+        // Serve from letter resurface queue
+        if let letterId = letterResurfaceQueue.first {
             currentCard = .letter(letterId)
+            input = ""
+            showingCorrectAnswer = false
+            showingEncodeHint = false
+            return
+        }
+
+        // Serve remaining encode cards from main queue
+        if let encodeWord = encodeQueue.first {
+            currentCard = .encode(encodeWord.word)
+            input = ""
+            showingCorrectAnswer = false
+            showingEncodeHint = false
+            return
+        }
+
+        // Serve from encode resurface queue
+        if let encodeWord = encodeResurfaceQueue.first {
+            currentCard = .encode(encodeWord.word)
             input = ""
             showingCorrectAnswer = false
             showingEncodeHint = false
@@ -113,11 +143,15 @@ final class DrillSessionViewModel: ObservableObject {
         // Update SRS
         appState.recordCorrectAnswer(for: letterId)
 
-        // Remove from queue
+        // Remove from whichever queue it's in
         if let index = letterQueue.firstIndex(of: letterId) {
             letterQueue.remove(at: index)
-        } else if let index = resurfaceQueue.firstIndex(of: letterId) {
-            resurfaceQueue.remove(at: index)
+            // Add to resurface if had wrong answer
+            if letterCurrentCardHadWrongAnswer {
+                letterResurfaceQueue.append(letterId)
+            }
+        } else if let index = letterResurfaceQueue.firstIndex(of: letterId) {
+            letterResurfaceQueue.remove(at: index)
         }
 
         lettersAnsweredCount += 1
@@ -136,53 +170,67 @@ final class DrillSessionViewModel: ObservableObject {
             penalizedLetters.insert(letterId)
         }
 
+        // Mark that this card had a wrong answer
+        letterCurrentCardHadWrongAnswer = true
+
+        // Store what the user typed
+        lastWrongAnswer = input
+
         // Show correct answer
         showingCorrectAnswer = true
-
-        // Move to resurface queue if in main queue
-        if let index = letterQueue.firstIndex(of: letterId) {
-            letterQueue.remove(at: index)
-            if !resurfaceQueue.contains(letterId) {
-                resurfaceQueue.append(letterId)
-            }
-        }
-        // If already in resurface queue, move to back
-        else if let index = resurfaceQueue.firstIndex(of: letterId) {
-            resurfaceQueue.remove(at: index)
-            resurfaceQueue.append(letterId)
-        }
     }
 
     func dismissCorrectAnswer() {
         showingCorrectAnswer = false
         input = ""
-        serveNextCard()
+        // Stay on the same card for retry (don't call serveNextCard)
     }
 
     // MARK: - Encode Card Handling
 
     func submitEncodeAnswer() {
-        guard case .encode(let word) = currentCard,
-              let encodeWord = encodeQueue.first(where: { $0.word == word }) else { return }
+        guard case .encode(let word) = currentCard else { return }
+
+        // Find the encode word in either queue
+        let encodeWord: EncodeWord?
+        if let found = encodeQueue.first(where: { $0.word == word }) {
+            encodeWord = found
+        } else {
+            encodeWord = encodeResurfaceQueue.first(where: { $0.word == word })
+        }
+
+        guard let encodeWord = encodeWord else { return }
 
         let correct = normalizeEncodeAnswer(input) == normalizeEncodeAnswer(encodeWord.natoSpelling.joined(separator: " "))
 
         if correct {
-            encodeQueue.removeFirst()
+            // Remove from whichever queue it's in
+            if let index = encodeQueue.firstIndex(where: { $0.word == word }) {
+                encodeQueue.remove(at: index)
+                // Add to resurface if had wrong answer
+                if encodeCurrentCardHadWrongAnswer {
+                    encodeResurfaceQueue.append(encodeWord)
+                }
+            } else if let index = encodeResurfaceQueue.firstIndex(where: { $0.word == word }) {
+                encodeResurfaceQueue.remove(at: index)
+            }
             completedCards += 1
             serveNextCard()
         } else {
+            // Mark that this card had a wrong answer
+            encodeCurrentCardHadWrongAnswer = true
+
+            // Store what the user typed
+            lastWrongAnswer = input
+
             showingEncodeHint = true
-            // Move to back of queue
-            encodeQueue.removeFirst()
-            encodeQueue.append(encodeWord)
         }
     }
 
     func dismissEncodeHint() {
         showingEncodeHint = false
         input = ""
-        serveNextCard()
+        // Stay on the same card for retry (don't call serveNextCard)
     }
 
     private func normalizeEncodeAnswer(_ input: String) -> String {
@@ -199,7 +247,7 @@ final class DrillSessionViewModel: ObservableObject {
 
     private func checkForNewDueCards() {
         let currentDue = Set(appState.dueLetters.map { $0.letterId })
-        let alreadyQueued = Set(letterQueue + resurfaceQueue + penalizedLetters)
+        let alreadyQueued = Set(letterQueue + letterResurfaceQueue + penalizedLetters)
         let newDue = currentDue.subtracting(alreadyQueued)
 
         if !newDue.isEmpty {
@@ -217,7 +265,7 @@ final class DrillSessionViewModel: ObservableObject {
     }
 
     var cardsRemaining: Int {
-        letterQueue.count + resurfaceQueue.count + encodeQueue.count
+        letterQueue.count + letterResurfaceQueue.count + encodeQueue.count + encodeResurfaceQueue.count
     }
 
     // MARK: - Current Card Helpers
@@ -229,6 +277,9 @@ final class DrillSessionViewModel: ObservableObject {
 
     var currentEncodeWord: EncodeWord? {
         guard case .encode(let word) = currentCard else { return nil }
-        return encodeQueue.first { $0.word == word }
+        if let found = encodeQueue.first(where: { $0.word == word }) {
+            return found
+        }
+        return encodeResurfaceQueue.first(where: { $0.word == word })
     }
 }

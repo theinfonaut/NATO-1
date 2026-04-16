@@ -155,10 +155,18 @@ enum LearningStep: Codable {
 struct LearningSessionState: Codable {
     let batchIndex: Int
     var currentStep: LearningStep
+
+    // Quiz state
     var quizDeck: [String]  // Letter IDs remaining in quiz
     var quizResurfaceQueue: [String]  // Letter IDs to resurface after first pass
+    var quizFirstPassComplete: Bool
+    var quizCurrentCardHadWrongAnswer: Bool
+
+    // Encode state
     var encodeDeck: [String]  // Words remaining in encode
     var encodeResurfaceQueue: [String]  // Words to resurface
+    var encodeFirstPassComplete: Bool
+    var encodeCurrentCardHadWrongAnswer: Bool
 }
 
 // MARK: - Drill Session State
@@ -193,7 +201,7 @@ struct DrillSessionState {
     }
 }
 
-enum DrillCard {
+enum DrillCard: Equatable {
     case letter(String)  // Letter ID
     case encode(String)  // Encode word
 }

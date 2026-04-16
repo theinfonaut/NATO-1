@@ -15,6 +15,7 @@ final class EncodePracticeViewModel: ObservableObject {
     @Published private(set) var currentWord: EncodeWord?
     @Published private(set) var isRoundComplete = false
     @Published private(set) var showingHint = false
+    @Published private(set) var lastWrongAnswer = ""
     @Published var input = ""
 
     // Round stats
@@ -26,6 +27,7 @@ final class EncodePracticeViewModel: ObservableObject {
     private var deck: [EncodeWord] = []
     private var resurfaceQueue: [EncodeWord] = []
     private var firstPassComplete = false
+    private var currentCardHadWrongAnswer = false
     private var missedWords: Set<String> = []
 
     private let appState = AppState.shared
@@ -46,6 +48,7 @@ final class EncodePracticeViewModel: ObservableObject {
         )
         resurfaceQueue = []
         firstPassComplete = false
+        currentCardHadWrongAnswer = false
         missedWords = []
         correctCount = 0
         missedCount = 0
@@ -55,6 +58,8 @@ final class EncodePracticeViewModel: ObservableObject {
     }
 
     private func serveNextCard() {
+        currentCardHadWrongAnswer = false
+
         if let word = deck.first {
             currentWord = word
             input = ""
@@ -64,10 +69,6 @@ final class EncodePracticeViewModel: ObservableObject {
             deck = resurfaceQueue
             resurfaceQueue = []
             serveNextCard()
-        } else if let word = deck.first {
-            currentWord = word
-            input = ""
-            showingHint = false
         } else {
             completeRound()
         }
@@ -85,6 +86,10 @@ final class EncodePracticeViewModel: ObservableObject {
             if !missedWords.contains(word.word) {
                 correctCount += 1
             }
+            // Add to resurface if had wrong answer (only during first pass)
+            if !firstPassComplete && currentCardHadWrongAnswer {
+                resurfaceQueue.append(word)
+            }
             deck.removeFirst()
             serveNextCard()
         } else {
@@ -94,20 +99,14 @@ final class EncodePracticeViewModel: ObservableObject {
                 missedCount += 1
             }
 
+            currentCardHadWrongAnswer = true
+            lastWrongAnswer = input
             showingHint = true
-
-            // Add to resurface queue (only during first pass)
-            if !firstPassComplete && !resurfaceQueue.contains(where: { $0.id == word.id }) {
-                resurfaceQueue.append(word)
-            }
-
-            // Move to back of deck
-            deck.removeFirst()
-            deck.append(word)
         }
     }
 
     func dismissHint() {
+        // Stay on same card for retry
         showingHint = false
         input = ""
     }

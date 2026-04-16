@@ -13,6 +13,7 @@ final class PersistenceManager {
     private enum Keys {
         static let batchProgress = "nato1.batchProgress"
         static let letterProgress = "nato1.letterProgress"
+        static let learningSession = "nato1.learningSession"
     }
 
     private init() {}
@@ -69,10 +70,34 @@ final class PersistenceManager {
         saveLetterProgress(Array(all.values))
     }
 
+    // MARK: - Learning Session
+
+    func saveLearningSession(_ session: LearningSessionState?) {
+        if let session = session,
+           let data = try? JSONEncoder().encode(session) {
+            defaults.set(data, forKey: Keys.learningSession)
+        } else {
+            defaults.removeObject(forKey: Keys.learningSession)
+        }
+    }
+
+    func loadLearningSession() -> LearningSessionState? {
+        guard let data = defaults.data(forKey: Keys.learningSession),
+              let session = try? JSONDecoder().decode(LearningSessionState.self, from: data) else {
+            return nil
+        }
+        return session
+    }
+
+    func clearLearningSession() {
+        defaults.removeObject(forKey: Keys.learningSession)
+    }
+
     // MARK: - Reset (for testing)
 
     func resetAll() {
         defaults.removeObject(forKey: Keys.batchProgress)
         defaults.removeObject(forKey: Keys.letterProgress)
+        defaults.removeObject(forKey: Keys.learningSession)
     }
 }

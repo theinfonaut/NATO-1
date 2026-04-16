@@ -41,6 +41,9 @@ struct EncodePracticeView: View {
         .onAppear {
             inputFocused = true
         }
+        .onChange(of: viewModel.currentWord?.id) { _, _ in
+            inputFocused = true
+        }
     }
 
     // MARK: - Practice View
@@ -52,23 +55,29 @@ struct EncodePracticeView: View {
             if let word = viewModel.currentWord {
                 // Word prompt
                 Text(word.word)
-                    .font(.system(size: 48, weight: .bold, design: .monospaced))
+                    .font(.system(size: 40, weight: .bold, design: .monospaced))
 
                 if viewModel.showingHint {
-                    // Show correct spelling
-                    Text(word.formattedSpelling)
-                        .font(.body)
-                        .foregroundStyle(.red)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 32)
-                        .padding(.top, 24)
+                    // Show what user typed and correct spelling
+                    VStack(spacing: 8) {
+                        Text("You typed: \(viewModel.lastWrongAnswer)")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        Text("Correct: \(word.formattedSpelling)")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.red)
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding(.horizontal, 32)
+                    .padding(.top, 20)
 
-                    Button("Continue") {
+                    Button("Try Again") {
                         viewModel.dismissHint()
                         inputFocused = true
                     }
                     .buttonStyle(.bordered)
-                    .padding(.top, 24)
+                    .padding(.top, 20)
                 } else {
                     // Instructions
                     Text("Spell using NATO words")
@@ -84,7 +93,7 @@ struct EncodePracticeView: View {
                         .autocorrectionDisabled()
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 32)
-                        .padding(.top, 24)
+                        .padding(.top, 20)
                         .focused($inputFocused)
                         .onSubmit {
                             viewModel.submitAnswer()
@@ -94,7 +103,7 @@ struct EncodePracticeView: View {
                         viewModel.submitAnswer()
                     }
                     .buttonStyle(.borderedProminent)
-                    .padding(.top, 16)
+                    .padding(.top, 12)
                     .disabled(viewModel.input.isEmpty)
                 }
             }
