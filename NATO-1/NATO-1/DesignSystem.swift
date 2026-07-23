@@ -69,8 +69,8 @@ enum DesignSystem {
         /// Minimum size for dim / decorative text. Spec: 17pt.
         static let minDimSize: CGFloat = 17
 
-        /// Leader dot repeating unit. Period + double space. Tunable.
-        static let leaderDotUnit = ".  "
+        /// Leader dot repeating unit. Period + single space (2 columns per dot). Tunable.
+        static let leaderDotUnit = ". "
 
         /// Rule dash repeating unit. Hyphen + space. Tunable.
         static let ruleDashUnit = "- "
@@ -83,10 +83,47 @@ enum DesignSystem {
             return Font.custom(name, size: size)
         }
 
+        /// Title font — bold at body size. Used for emphasis only, not as an affordance signal.
+        static var title: Font { terminal(minDimSize, weight: .bold) }
+
         /// Tracking (letter spacing) in points for a given font size.
         /// Pass the same size you used for the font.
         static func tracking(for size: CGFloat) -> CGFloat {
             CGFloat(letterSpacingEm) * size
+        }
+    }
+
+    // MARK: - Metrics (column grid)
+
+    enum Metrics {
+        /// Width of one monospace column at the standard terminal size + tracking.
+        /// Measured from a 50-character sample so tracking error doesn't compound.
+        /// The trailing kern after the last character is subtracted before dividing,
+        /// since it adds invisible space that doesn't correspond to a visible column.
+        static let columnWidth: CGFloat = {
+            let font = UIFont(name: Typography.fontNameRegular, size: Typography.minDimSize)
+                ?? .monospacedSystemFont(ofSize: Typography.minDimSize, weight: .regular)
+            let sample = String(repeating: "X", count: 50)
+            let tracking = Typography.tracking(for: Typography.minDimSize)
+            let attrs: [NSAttributedString.Key: Any] = [
+                .font: font,
+                .kern: tracking
+            ]
+            let totalWidth = (sample as NSString).size(withAttributes: attrs).width
+            // Subtract the trailing kern — it's applied after the last character
+            // but doesn't correspond to a visible glyph column.
+            let usableWidth = totalWidth - tracking
+            return usableWidth / 50
+        }()
+
+        /// How many columns fit in the given point width.
+        /// Rounds up when the leftover space exceeds 60% of a column, so rules
+        /// fill edge-to-edge. Clipped at the container edge if slightly over.
+        static func columns(fittingWidth width: CGFloat) -> Int {
+            let raw = width / columnWidth
+            let floored = Int(raw)
+            let fraction = raw - Double(floored)
+            return max(0, fraction > 0.6 ? floored + 1 : floored)
         }
     }
 

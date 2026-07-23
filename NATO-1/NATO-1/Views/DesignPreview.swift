@@ -59,15 +59,51 @@ struct DesignPreview: View {
 
     // MARK: Header
 
+    private static let headerTitle = "LEARNING PROTOCOL"
+
     private var learnHeader: some View {
-        VStack(spacing: 6) {
-            DashedRule(color: dimColor)
-            Text("-LEARNING--PROTOCOL-")
-                .terminalStyle(size: DesignSystem.Typography.minDimSize, color: dimColor)
-                .textCase(.uppercase)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            DashedRule(color: dimColor)
+        GeometryReader { geo in
+            let columns = DesignSystem.Metrics.columns(fittingWidth: geo.size.width)
+            let fullRule = String(repeating: "-", count: columns)
+
+            // Title line: dashes + space + LEARNING PROTOCOL + space + dashes
+            let titleCols = Self.headerTitle.count + 2
+            let dashBudget = max(0, columns - titleCols)
+            let leftDashes = dashBudget / 2
+            let rightDashes = dashBudget - leftDashes
+            let leftPart = String(repeating: "-", count: leftDashes) + " "
+            let rightPart = " " + String(repeating: "-", count: rightDashes)
+
+            VStack(alignment: .leading, spacing: 0) {
+                // Top rule
+                Text(fullRule)
+                    .terminalStyle(size: DesignSystem.Typography.minDimSize, color: dimColor)
+                    .fixedSize()
+
+                // Title line
+                HStack(alignment: .firstTextBaseline, spacing: 0) {
+                    Text(leftPart)
+                        .terminalStyle(size: DesignSystem.Typography.minDimSize, color: dimColor)
+                        .fixedSize()
+                    Text(Self.headerTitle)
+                        .font(DesignSystem.Typography.title)
+                        .tracking(DesignSystem.Typography.tracking(for: DesignSystem.Typography.minDimSize))
+                        .foregroundStyle(dimColor)
+                        .fixedSize()
+                    Text(rightPart)
+                        .terminalStyle(size: DesignSystem.Typography.minDimSize, color: dimColor)
+                        .fixedSize()
+                }
+
+                // Bottom rule
+                Text(fullRule)
+                    .terminalStyle(size: DesignSystem.Typography.minDimSize, color: dimColor)
+                    .fixedSize()
+            }
         }
+        .frame(maxWidth: .infinity)
+        .frame(height: 66) // 3 lines × 22pt
+        .clipped()
     }
 }
 
@@ -83,28 +119,59 @@ private struct TerminalBatchRow: View {
     private var nameColor: Color   { isActive ? tappableColor : dimColor }
     private var letterColor: Color { isActive ? tappableColor : dimColor }
 
+    // Fixed column strings for each row part (including spacing gaps)
+    private var nameString: String { "BATCH \(batch.number) " }
+    private var lettersString: String { " " + batch.lettersDisplay + " " }
+    private var glyphString: String { batch.state == .active ? ">" : "!" }
+
+    private var fixedColumns: Int {
+        nameString.count + lettersString.count + glyphString.count
+    }
+
     var body: some View {
         Button(action: {}) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                // Batch name — pinned left
-                Text("BATCH \(batch.number)")
-                    .terminalStyle(size: DesignSystem.Typography.minDimSize, color: nameColor)
-                    .textCase(.uppercase)
-                    .fixedSize()
+            GeometryReader { geo in
+                let totalColumns = DesignSystem.Metrics.columns(fittingWidth: geo.size.width)
+                let leaderBudget = max(0, totalColumns - fixedColumns)
+                // Leader pattern: ". . . . ." — ends on a period (2n-1 columns for n dots).
+                // n dots fit when budget >= 2n-1, i.e. n = (budget + 1) / 2
+                let dotCount = leaderBudget > 0 ? (leaderBudget + 1) / 2 : 0
+                let dotsColumns = dotCount > 0 ? dotCount * 2 - 1 : 0
+                let trailingPad = leaderBudget - dotsColumns // 0 or 1
+                let leaderText = dotCount > 0
+                    ? Array(repeating: ".", count: dotCount).joined(separator: " ")
+                        + String(repeating: " ", count: trailingPad)
+                    : String(repeating: " ", count: leaderBudget)
 
-                // Letters
-                Text(batch.lettersDisplay)
-                    .terminalStyle(size: DesignSystem.Typography.minDimSize, color: letterColor)
-                    .textCase(.uppercase)
-                    .fixedSize()
+                let fullLine = nameString + leaderText + lettersString
 
-                // Dotted leader — fills gap between letters and trailing glyph
-                DottedLeader(color: dimColor)
+                HStack(alignment: .firstTextBaseline, spacing: 0) {
+                    // Batch name + leader + letters as one Text
+                    Text(fullLine)
+                        .terminalStyle(size: DesignSystem.Typography.minDimSize, color: dimColor)
+                        .textCase(.uppercase)
+                        .fixedSize()
+                        .overlay(alignment: .leading) {
+                            // Color overlay for batch name
+                            Text(nameString)
+                                .terminalStyle(size: DesignSystem.Typography.minDimSize, color: nameColor)
+                                .textCase(.uppercase)
+                                .fixedSize()
+                        }
+                        .overlay(alignment: .trailing) {
+                            // Color overlay for letters
+                            Text(lettersString)
+                                .terminalStyle(size: DesignSystem.Typography.minDimSize, color: letterColor)
+                                .textCase(.uppercase)
+                                .fixedSize()
+                        }
 
-                // Trailing glyph — pinned right
-                trailingGlyph
+                    // Trailing glyph
+                    trailingGlyph
+                }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity)
+            .frame(height: 22)
         }
         .buttonStyle(.plain)
         .contentShape(Rectangle())
@@ -162,36 +229,23 @@ private struct BlinkingChevron: View {
     }
 }
 
-// MARK: - Dotted leader
-
-/// Fills available horizontal space with real period characters from the font.
-/// Pattern: ".  .  .  " (period + double space), clipped at the container edge.
-/// Dots are always dim — spec: "Leader dots always dim regardless of row state."
-private struct DottedLeader: View {
-    let color: Color
-
-    var body: some View {
-        Text(String(repeating: DesignSystem.Typography.leaderDotUnit, count: 60))
-            .terminalStyle(size: DesignSystem.Typography.minDimSize, color: color)
-            .fixedSize()
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .clipped()
-    }
-}
-
 // MARK: - Dashed rule
 
-/// Full-width rule using real hyphen characters from the font, clipped at the container edge.
+/// Full-width rule built from contiguous hyphen characters.
+/// Column count computed from available width — no truncation.
 private struct DashedRule: View {
     let color: Color
 
     var body: some View {
-        Text(String(repeating: DesignSystem.Typography.ruleDashUnit, count: 120))
-            .terminalStyle(size: DesignSystem.Typography.minDimSize, color: color)
-            .lineLimit(1)
-            .fixedSize()
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .clipped()
+        GeometryReader { geo in
+            let columns = DesignSystem.Metrics.columns(fittingWidth: geo.size.width)
+            Text(String(repeating: "-", count: columns))
+                .terminalStyle(size: DesignSystem.Typography.minDimSize, color: color)
+                .fixedSize()
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 22)
+        .clipped()
     }
 }
 
@@ -208,9 +262,8 @@ private struct TerminalTabBar: View {
                 .padding(.bottom, 12)
 
             HStack {
-                Spacer()
-
                 // Active tab: bracketed label with dim-fill chip, dark text
+                // Chip background starts at the left margin (no extra padding before bracket)
                 Text("[LEARN]")
                     .terminalStyle(
                         size: DesignSystem.Typography.minDimSize,
@@ -239,9 +292,8 @@ private struct TerminalTabBar: View {
                         color: tappableColor
                     )
                     .textCase(.uppercase)
-
-                Spacer()
             }
+            .padding(.horizontal, 20)
             .padding(.bottom, 8)
         }
         .background(DesignSystem.Colors.background)
@@ -261,13 +313,13 @@ private struct PreviewBatch: Identifiable {
 
 private enum PreviewData {
     static let batches: [PreviewBatch] = [
-        PreviewBatch(id: 1, lettersDisplay: "A  B  C  D", state: .active),
-        PreviewBatch(id: 2, lettersDisplay: "E  F  G  H", state: .locked),
-        PreviewBatch(id: 3, lettersDisplay: "I  J  K  L", state: .locked),
-        PreviewBatch(id: 4, lettersDisplay: "M  N  O  P", state: .locked),
-        PreviewBatch(id: 5, lettersDisplay: "Q  R  S  T", state: .locked),
-        PreviewBatch(id: 6, lettersDisplay: "U  V  W",    state: .locked),
-        PreviewBatch(id: 7, lettersDisplay: "X  Y  Z",    state: .locked),
+        PreviewBatch(id: 1, lettersDisplay: "ABCD", state: .active),
+        PreviewBatch(id: 2, lettersDisplay: "EFGH", state: .locked),
+        PreviewBatch(id: 3, lettersDisplay: "IJKL", state: .locked),
+        PreviewBatch(id: 4, lettersDisplay: "MNOP", state: .locked),
+        PreviewBatch(id: 5, lettersDisplay: "QRST", state: .locked),
+        PreviewBatch(id: 6, lettersDisplay: "UVW",  state: .locked),
+        PreviewBatch(id: 7, lettersDisplay: "XYZ",  state: .locked),
     ]
 }
 
