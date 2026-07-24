@@ -205,6 +205,51 @@ Key references explored: Teenage Engineering product design, Dieter Rams / Braun
 
 Working name: NATO-1. Final name requires App Store strategy and naming research. Candidates considered: NATO-1, AlphaBravoCharlie, Foxtrot, Callsign, LEARN NATO. Note: Callsign is already used in the App Store.
 
+### Layout Rules
+
+The interface uses a character-grid model: available width is measured, divided
+by the width of one monospace column, and floored to a whole number of columns.
+Content is composed in characters, not points.
+
+**Rule 1 — Grid owns content, points own margins.**
+Compute the column count from available width minus a minimum margin, multiply
+back out to get the block's exact width, and center that block on screen. The
+leftover fractional space splits evenly into the left and right margins, where
+it's invisible, rather than accumulating on one edge where it clips content.
+All screen content — rules, rows, titles, tab bar — shares one block and one
+set of margins.
+
+**Rule 2 — Odd remainders always favor the same side.**
+When a centered element's leftover characters don't split evenly, the extra one
+goes right. Everywhere, always. Consistency reads as intentional; alternating
+reads as a bug.
+
+**Rule 3 — Fixed content beats flexible fill.**
+Labels, letters, and glyphs never compress or clip. Leaders and rules absorb all
+variation and may shrink to zero characters. If something must be sacrificed,
+it's always the fill. No truncation, no ellipsis characters, anywhere.
+
+**Rule 4 — Below the floor, change layout instead of degrading.**
+If fixed content alone exceeds the available columns, do not clip and do not
+shrink type. Wrap onto multiple lines. Applies to batch rows, the header title
+(drop flanking dashes first, then wrap), and the tab bar (stack vertically).
+When a row wraps, drop its leader dots — a leader connects a label to a value
+across a line, and once they're on separate lines it connects nothing.
+
+**Measurement and rendering must always agree.** Column width is measured using
+the same scaled font and tracking used to render, recomputed whenever Dynamic
+Type changes. A cached or unscaled measurement produces a layout that silently
+disagrees with what's on screen.
+
+#### Known limitation — very large accessibility text sizes
+
+At the largest Dynamic Type settings, rows wrap onto two lines. This is
+functional but not elegant. A better approach is progressive abbreviation
+(BATCH 1 → B1), which keeps rows on a single line and reads as more
+terminal-authentic. Deferred because abbreviation is content-specific and must
+be decided per screen, whereas wrapping is content-agnostic and works
+system-wide. Revisit once Meet, Quiz, and Codex layouts are designed.
+
 ---
 
 ## 8. Monetisation

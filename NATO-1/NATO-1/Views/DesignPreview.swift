@@ -5,6 +5,11 @@
 //  Standalone visual prototype of the restyled Learn tab.
 //  NOT wired to AppState, NATOData, or any real app logic.
 //  Preview state: Batch 1 active, Batches 2–7 locked.
+//
+//  Layout: A single top-level GeometryReader computes one column count
+//  and one blockWidth (cols × columnWidth). That block is centered on
+//  screen. All children receive `columns: Int` — no per-component
+//  GeometryReaders, no fractional accumulation.
 
 import SwiftUI
 
@@ -13,6 +18,7 @@ import SwiftUI
 struct DesignPreview: View {
     @Environment(\.colorSchemeContrast) private var systemContrast
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     // Preview overrides — nil means "use system value"
     var overrideHighContrast: Bool? = nil
@@ -24,93 +30,126 @@ struct DesignPreview: View {
     private var tappableColor: Color { isHighContrast ? DesignSystem.Colors.tappableHighContrast : DesignSystem.Colors.tappable }
 
     var body: some View {
-        ZStack {
-            DesignSystem.Colors.background.ignoresSafeArea()
+        // Reading dynamicTypeSize registers the SwiftUI dependency so the
+        // body is re-evaluated whenever the user's text size changes.
+        let _ = dynamicTypeSize
 
-            VStack(spacing: 0) {
-                // ── Header ───────────────────────────────────────────────
-                learnHeader
-                    .padding(.top, 16)
-                    .padding(.horizontal, 20)
+        GeometryReader { geo in
+            let colWidth = DesignSystem.Metrics.columnWidth
+            let availableWidth = geo.size.width - 2 * DesignSystem.Metrics.minHorizontalMargin
+            let cols = DesignSystem.Metrics.columns(fittingWidth: availableWidth)
+            let blockWidth = CGFloat(cols) * colWidth
+            let _ = print("[LAYOUT] geo.width=\(geo.size.width) columnWidth=\(colWidth) cols=\(cols) blockWidth=\(blockWidth) availableWidth=\(availableWidth) dynamicType=\(dynamicTypeSize)")
 
-                // ── Batch rows ───────────────────────────────────────────
-                ScrollView {
-                    VStack(spacing: 0) {
-                        ForEach(PreviewData.batches) { batch in
-                            TerminalBatchRow(
-                                batch: batch,
-                                dimColor: dimColor,
-                                tappableColor: tappableColor,
-                                reduceMotion: isReduceMotion
-                            )
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 10)
+            ZStack {
+                DesignSystem.Colors.background.ignoresSafeArea()
+
+                VStack(spacing: 0) {
+                    // ── Header ───────────────────────────────────────
+                    TerminalHeader(columns: cols, dimColor: dimColor)
+                        .padding(.top, 16)
+
+                    // ── Batch rows ───────────────────────────────────
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            ForEach(PreviewData.batches) { batch in
+                                TerminalBatchRow(
+                                    batch: batch,
+                                    columns: cols,
+                                    dimColor: dimColor,
+                                    tappableColor: tappableColor,
+                                    reduceMotion: isReduceMotion
+                                )
+                                .padding(.vertical, 10)
+                            }
                         }
+                        .padding(.top, 12)
+                        .padding(.bottom, 16)
                     }
-                    .padding(.top, 12)
-                    .padding(.bottom, 16)
+
+                    // ── Tab bar ──────────────────────────────────────
+                    TerminalTabBar(columns: cols, dimColor: dimColor, tappableColor: tappableColor)
                 }
+                .frame(width: blockWidth, alignment: .center)
             }
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            TerminalTabBar(dimColor: dimColor, tappableColor: tappableColor)
+    }
+}
+
+// MARK: - Header
+
+private struct TerminalHeader: View {
+    let columns: Int
+    let dimColor: Color
+
+    private static let headerTitle = "LEARNING PROTOCOL"
+    private var titleLength: Int { Self.headerTitle.count }
+
+    // Title fits with dashes when columns >= title + 2 spaces + at least 2 dashes
+    private var titleFitsWithDashes: Bool { columns >= titleLength + 4 }
+    private var titleFitsOnOneLine: Bool { columns >= titleLength }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Top rule
+            Text(String(repeating: "-", count: columns))
+                .terminalStyle(size: DesignSystem.Typography.minDimSize, color: dimColor)
+                .fixedSize()
+
+            // Title line — Rule 4 fallback
+            if titleFitsWithDashes {
+                dashedTitleLine
+            } else {
+                // No dashes — title alone, wrapping if needed
+                Text(Self.headerTitle)
+                    .font(DesignSystem.Typography.title)
+                    .tracking(DesignSystem.Typography.tracking(for: DesignSystem.Typography.minDimSize))
+                    .foregroundStyle(dimColor)
+                    .lineLimit(nil)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            // Bottom rule
+            Text(String(repeating: "-", count: columns))
+                .terminalStyle(size: DesignSystem.Typography.minDimSize, color: dimColor)
+                .fixedSize()
         }
     }
 
-    // MARK: Header
+    private var dashedTitleLine: some View {
+        let titleCols = titleLength + 2 // +2 for spaces
+        let dashBudget = max(0, columns - titleCols)
+        let leftDashes = dashBudget / 2
+        let rightDashes = dashBudget - leftDashes // odd remainder goes right
 
-    private static let headerTitle = "LEARNING PROTOCOL"
-
-    private var learnHeader: some View {
-        GeometryReader { geo in
-            let columns = DesignSystem.Metrics.columns(fittingWidth: geo.size.width)
-            let fullRule = String(repeating: "-", count: columns)
-
-            // Title line: dashes + space + LEARNING PROTOCOL + space + dashes
-            let titleCols = Self.headerTitle.count + 2
-            let dashBudget = max(0, columns - titleCols)
-            let leftDashes = dashBudget / 2
-            let rightDashes = dashBudget - leftDashes
-            let leftPart = String(repeating: "-", count: leftDashes) + " "
-            let rightPart = " " + String(repeating: "-", count: rightDashes)
-
-            VStack(alignment: .leading, spacing: 0) {
-                // Top rule
-                Text(fullRule)
-                    .terminalStyle(size: DesignSystem.Typography.minDimSize, color: dimColor)
-                    .fixedSize()
-
-                // Title line
-                HStack(alignment: .firstTextBaseline, spacing: 0) {
-                    Text(leftPart)
-                        .terminalStyle(size: DesignSystem.Typography.minDimSize, color: dimColor)
-                        .fixedSize()
-                    Text(Self.headerTitle)
-                        .font(DesignSystem.Typography.title)
-                        .tracking(DesignSystem.Typography.tracking(for: DesignSystem.Typography.minDimSize))
-                        .foregroundStyle(dimColor)
-                        .fixedSize()
-                    Text(rightPart)
-                        .terminalStyle(size: DesignSystem.Typography.minDimSize, color: dimColor)
-                        .fixedSize()
-                }
-
-                // Bottom rule
-                Text(fullRule)
-                    .terminalStyle(size: DesignSystem.Typography.minDimSize, color: dimColor)
-                    .fixedSize()
-            }
+        return HStack(alignment: .firstTextBaseline, spacing: 0) {
+            Text(String(repeating: "-", count: leftDashes) + " ")
+                .terminalStyle(size: DesignSystem.Typography.minDimSize, color: dimColor)
+                .fixedSize()
+            Text(Self.headerTitle)
+                .font(DesignSystem.Typography.title)
+                .tracking(DesignSystem.Typography.tracking(for: DesignSystem.Typography.minDimSize))
+                .foregroundStyle(dimColor)
+                .fixedSize()
+            Text(" " + String(repeating: "-", count: rightDashes))
+                .terminalStyle(size: DesignSystem.Typography.minDimSize, color: dimColor)
+                .fixedSize()
         }
-        .frame(maxWidth: .infinity)
-        .frame(height: 66) // 3 lines × 22pt
-        .clipped()
     }
 }
 
 // MARK: - Batch row
 
+// Future: at very large Dynamic Type sizes, progressive abbreviation
+// (e.g. BATCH 1 → B1) would keep rows on a single line and read as more
+// terminal-authentic than wrapping. Deferred because abbreviation is
+// content-specific and must be decided per screen; wrapping is
+// content-agnostic and works system-wide. Revisit once Meet, Quiz, and
+// Codex layouts are designed.
+
 private struct TerminalBatchRow: View {
     let batch: PreviewBatch
+    let columns: Int
     let dimColor: Color
     let tappableColor: Color
     let reduceMotion: Bool
@@ -119,7 +158,6 @@ private struct TerminalBatchRow: View {
     private var nameColor: Color   { isActive ? tappableColor : dimColor }
     private var letterColor: Color { isActive ? tappableColor : dimColor }
 
-    // Fixed column strings for each row part (including spacing gaps)
     private var nameString: String { "BATCH \(batch.number) " }
     private var lettersString: String { " " + batch.lettersDisplay + " " }
     private var glyphString: String { batch.state == .active ? ">" : "!" }
@@ -130,54 +168,77 @@ private struct TerminalBatchRow: View {
 
     var body: some View {
         Button(action: {}) {
-            GeometryReader { geo in
-                let totalColumns = DesignSystem.Metrics.columns(fittingWidth: geo.size.width)
-                let leaderBudget = max(0, totalColumns - fixedColumns)
-                // Leader pattern: ". . . . ." — ends on a period (2n-1 columns for n dots).
-                // n dots fit when budget >= 2n-1, i.e. n = (budget + 1) / 2
-                let dotCount = leaderBudget > 0 ? (leaderBudget + 1) / 2 : 0
-                let dotsColumns = dotCount > 0 ? dotCount * 2 - 1 : 0
-                let trailingPad = leaderBudget - dotsColumns // 0 or 1
-                let leaderText = dotCount > 0
-                    ? Array(repeating: ".", count: dotCount).joined(separator: " ")
-                        + String(repeating: " ", count: trailingPad)
-                    : String(repeating: " ", count: leaderBudget)
-
-                let fullLine = nameString + leaderText + lettersString
-
-                HStack(alignment: .firstTextBaseline, spacing: 0) {
-                    // Batch name + leader + letters as one Text
-                    Text(fullLine)
-                        .terminalStyle(size: DesignSystem.Typography.minDimSize, color: dimColor)
-                        .textCase(.uppercase)
-                        .fixedSize()
-                        .overlay(alignment: .leading) {
-                            // Color overlay for batch name
-                            Text(nameString)
-                                .terminalStyle(size: DesignSystem.Typography.minDimSize, color: nameColor)
-                                .textCase(.uppercase)
-                                .fixedSize()
-                        }
-                        .overlay(alignment: .trailing) {
-                            // Color overlay for letters
-                            Text(lettersString)
-                                .terminalStyle(size: DesignSystem.Typography.minDimSize, color: letterColor)
-                                .textCase(.uppercase)
-                                .fixedSize()
-                        }
-
-                    // Trailing glyph
-                    trailingGlyph
-                }
+            if fixedColumns <= columns {
+                singleLineContent
+            } else {
+                wrappedContent
             }
-            .frame(maxWidth: .infinity)
-            .frame(height: 22)
         }
         .buttonStyle(.plain)
         .contentShape(Rectangle())
         .frame(minHeight: 44)
         .accessibilityLabel(accessibilityLabel)
         .accessibilityAddTraits(.isButton)
+    }
+
+    private var singleLineContent: some View {
+        let leaderBudget = max(0, columns - fixedColumns)
+        let dotCount = leaderBudget > 0 ? (leaderBudget + 1) / 2 : 0
+        let dotsColumns = dotCount > 0 ? dotCount * 2 - 1 : 0
+        let trailingPad = leaderBudget - dotsColumns
+        let leaderText = dotCount > 0
+            ? Array(repeating: ".", count: dotCount).joined(separator: " ")
+                + String(repeating: " ", count: trailingPad)
+            : String(repeating: " ", count: leaderBudget)
+
+        let fullLine = nameString + leaderText + lettersString
+
+        return HStack(alignment: .firstTextBaseline, spacing: 0) {
+            Text(fullLine)
+                .terminalStyle(size: DesignSystem.Typography.minDimSize, color: dimColor)
+                .textCase(.uppercase)
+                .fixedSize()
+                .overlay(alignment: .leading) {
+                    Text(nameString)
+                        .terminalStyle(size: DesignSystem.Typography.minDimSize, color: nameColor)
+                        .textCase(.uppercase)
+                        .fixedSize()
+                }
+                .overlay(alignment: .trailing) {
+                    Text(lettersString)
+                        .terminalStyle(size: DesignSystem.Typography.minDimSize, color: letterColor)
+                        .textCase(.uppercase)
+                        .fixedSize()
+                }
+
+            trailingGlyph
+        }
+    }
+
+    // Rule 4: wrap onto two lines, no leader dots.
+    // The 44pt min-height applies to the row as a whole; wrapped lines
+    // sit at normal line spacing (no extra gap).
+    private var wrappedContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Line 1: name + letters (no leader — it connects nothing across lines)
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
+                Text(nameString)
+                    .terminalStyle(size: DesignSystem.Typography.minDimSize, color: nameColor)
+                    .textCase(.uppercase)
+                    .lineLimit(nil)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(batch.lettersDisplay)
+                    .terminalStyle(size: DesignSystem.Typography.minDimSize, color: letterColor)
+                    .textCase(.uppercase)
+                    .lineLimit(nil)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            // Line 2: glyph right-aligned
+            HStack(spacing: 0) {
+                Spacer(minLength: 0)
+                trailingGlyph
+            }
+        }
     }
 
     @ViewBuilder
@@ -231,72 +292,98 @@ private struct BlinkingChevron: View {
 
 // MARK: - Dashed rule
 
-/// Full-width rule built from contiguous hyphen characters.
-/// Column count computed from available width — no truncation.
 private struct DashedRule: View {
+    let columns: Int
     let color: Color
 
     var body: some View {
-        GeometryReader { geo in
-            let columns = DesignSystem.Metrics.columns(fittingWidth: geo.size.width)
-            Text(String(repeating: "-", count: columns))
-                .terminalStyle(size: DesignSystem.Typography.minDimSize, color: color)
-                .fixedSize()
-        }
-        .frame(maxWidth: .infinity)
-        .frame(height: 22)
-        .clipped()
+        Text(String(repeating: "-", count: columns))
+            .terminalStyle(size: DesignSystem.Typography.minDimSize, color: color)
+            .fixedSize()
     }
 }
 
 // MARK: - Tab bar
 
 private struct TerminalTabBar: View {
+    let columns: Int
     let dimColor: Color
     let tappableColor: Color
 
+    // Column counts for each label (brackets included)
+    private static let labels = ["[LEARN]", "[DRILL]", "[CODEX]"]
+    // Minimum columns: all three labels + 1 space between each pair
+    private static let minSingleLineColumns: Int = {
+        labels.map(\.count).reduce(0, +) + (labels.count - 1)
+    }()
+
+    private var fitsOnOneLine: Bool { columns >= Self.minSingleLineColumns }
+
     var body: some View {
         VStack(spacing: 0) {
-            DashedRule(color: dimColor)
-                .padding(.horizontal, 20)
+            DashedRule(columns: columns, color: dimColor)
                 .padding(.bottom, 12)
 
-            HStack {
-                // Active tab: bracketed label with dim-fill chip, dark text
-                // Chip background starts at the left margin (no extra padding before bracket)
-                Text("[LEARN]")
-                    .terminalStyle(
-                        size: DesignSystem.Typography.minDimSize,
-                        color: DesignSystem.Colors.background
-                    )
-                    .textCase(.uppercase)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 7)
-                    .background(dimColor)
-
-                Spacer()
-
-                // Inactive tabs: bright bracketed text
-                Text("[DRILL]")
-                    .terminalStyle(
-                        size: DesignSystem.Typography.minDimSize,
-                        color: tappableColor
-                    )
-                    .textCase(.uppercase)
-
-                Spacer()
-
-                Text("[CODEX]")
-                    .terminalStyle(
-                        size: DesignSystem.Typography.minDimSize,
-                        color: tappableColor
-                    )
-                    .textCase(.uppercase)
+            if fitsOnOneLine {
+                horizontalTabs
+            } else {
+                verticalTabs
             }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 8)
         }
+        .padding(.bottom, 8)
         .background(DesignSystem.Colors.background)
+    }
+
+    private var horizontalTabs: some View {
+        HStack {
+            learnChip
+            Spacer()
+            drillLabel
+            Spacer()
+            codexLabel
+        }
+    }
+
+    private var verticalTabs: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            learnChip
+            drillLabel
+            codexLabel
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var learnChip: some View {
+        Text("[LEARN]")
+            .terminalStyle(
+                size: DesignSystem.Typography.minDimSize,
+                color: DesignSystem.Colors.background
+            )
+            .textCase(.uppercase)
+            .fixedSize()
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(dimColor)
+    }
+
+    private var drillLabel: some View {
+        Text("[DRILL]")
+            .terminalStyle(
+                size: DesignSystem.Typography.minDimSize,
+                color: tappableColor
+            )
+            .textCase(.uppercase)
+            .fixedSize()
+    }
+
+    private var codexLabel: some View {
+        Text("[CODEX]")
+            .terminalStyle(
+                size: DesignSystem.Typography.minDimSize,
+                color: tappableColor
+            )
+            .textCase(.uppercase)
+            .fixedSize()
     }
 }
 

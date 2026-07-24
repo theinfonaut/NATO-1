@@ -96,17 +96,23 @@ enum DesignSystem {
     // MARK: - Metrics (column grid)
 
     enum Metrics {
-        /// Width of one monospace column at the standard terminal size + tracking.
+        /// Width of one monospace column at the current Dynamic Type scale.
         /// Measured from a 50-character sample so tracking error doesn't compound.
         /// The trailing kern after the last character is subtracted before dividing,
         /// since it adds invisible space that doesn't correspond to a visible column.
-        static let columnWidth: CGFloat = {
-            let font = UIFont(name: Typography.fontNameRegular, size: Typography.minDimSize)
+        ///
+        /// This is a computed property (not a stored constant) because Dynamic Type
+        /// can change at any time. The measurement must use the same scaled font
+        /// that SwiftUI renders with `Font.custom(_:size:)`.
+        static var columnWidth: CGFloat {
+            let baseFont = UIFont(name: Typography.fontNameRegular, size: Typography.minDimSize)
                 ?? .monospacedSystemFont(ofSize: Typography.minDimSize, weight: .regular)
+            let scaledFont = UIFontMetrics.default.scaledFont(for: baseFont)
+            let scaledSize = scaledFont.pointSize
+            let tracking = Typography.tracking(for: scaledSize)
             let sample = String(repeating: "X", count: 50)
-            let tracking = Typography.tracking(for: Typography.minDimSize)
             let attrs: [NSAttributedString.Key: Any] = [
-                .font: font,
+                .font: scaledFont,
                 .kern: tracking
             ]
             let totalWidth = (sample as NSString).size(withAttributes: attrs).width
@@ -114,16 +120,16 @@ enum DesignSystem {
             // but doesn't correspond to a visible glyph column.
             let usableWidth = totalWidth - tracking
             return usableWidth / 50
-        }()
+        }
 
-        /// How many columns fit in the given point width.
-        /// Rounds up when the leftover space exceeds 60% of a column, so rules
-        /// fill edge-to-edge. Clipped at the container edge if slightly over.
+        /// Minimum horizontal margin per side. The actual margin will be
+        /// at least this large; any leftover fractional-column space is
+        /// split evenly between the two sides.
+        static let minHorizontalMargin: CGFloat = 16
+
+        /// Strict floor — guaranteed to fit within the given width.
         static func columns(fittingWidth width: CGFloat) -> Int {
-            let raw = width / columnWidth
-            let floored = Int(raw)
-            let fraction = raw - Double(floored)
-            return max(0, fraction > 0.6 ? floored + 1 : floored)
+            max(0, Int(width / columnWidth))
         }
     }
 
