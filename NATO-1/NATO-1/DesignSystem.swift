@@ -75,6 +75,20 @@ enum DesignSystem {
         /// Rule dash repeating unit. Hyphen + space. Tunable.
         static let ruleDashUnit = "- "
 
+        /// Descender-to-line-height ratio for the terminal font.
+        /// All-caps labels have no descenders, so the glyphs sit in the upper
+        /// portion of the line box. Symmetric padding looks bottom-heavy.
+        /// This ratio is used to shift chip backgrounds up so letterforms
+        /// appear optically centered. Computed from the font's actual metrics
+        /// so it scales with Dynamic Type.
+        static var capsVerticalBias: CGFloat {
+            let font = UIFont(name: fontNameRegular, size: minDimSize)
+                ?? .monospacedSystemFont(ofSize: minDimSize, weight: .regular)
+            let scaled = UIFontMetrics.default.scaledFont(for: font)
+            // descender is negative; we want the magnitude as a fraction of line height
+            return abs(scaled.descender) / scaled.lineHeight
+        }
+
         // MARK: Font helpers
 
         /// Returns the terminal font at the given size and weight.
@@ -195,4 +209,34 @@ extension View {
             .foregroundStyle(color)
     }
 
+    /// All-caps chip with optically centered background.
+    /// Compensates for the descender space in the line box so the background
+    /// hugs the cap-height glyphs rather than sitting low. The correction
+    /// steals from bottom padding and adds to top, shifting the text up
+    /// within the chip to counteract the invisible descender space.
+    /// Scales with Dynamic Type via `capsVerticalBias`.
+    func terminalChip(
+        textColor: Color,
+        backgroundColor: Color,
+        verticalPadding: CGFloat = 7
+    ) -> some View {
+        let bias = DesignSystem.Typography.capsVerticalBias
+        // Less top padding, more bottom — counteracts the descender
+        // space inside the line box that already sits below the caps.
+        let correction = verticalPadding * bias * 0.5
+        let topPad = verticalPadding - correction
+        let bottomPad = verticalPadding + correction
+        let _ = print("[CHIP] bias=\(bias) correction=\(correction) topPad=\(topPad) bottomPad=\(bottomPad)")
+
+        return self
+            .terminalStyle(
+                size: DesignSystem.Typography.minDimSize,
+                color: textColor
+            )
+            .textCase(.uppercase)
+            .fixedSize()
+            .padding(.top, topPad)
+            .padding(.bottom, bottomPad)
+            .background(backgroundColor)
+    }
 }

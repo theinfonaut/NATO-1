@@ -2,7 +2,7 @@
 //  DesignPreview.swift
 //  NATO-1
 //
-//  Standalone visual prototype of the restyled Learn tab.
+//  Standalone visual prototype of the restyled app.
 //  NOT wired to AppState, NATOData, or any real app logic.
 //  Preview state: Batch 1 active, Batches 2–7 locked.
 //
@@ -13,12 +13,37 @@
 
 import SwiftUI
 
+// MARK: - Tab model
+
+private enum PreviewTab: String, CaseIterable {
+    case learn, drill, codex
+
+    var label: String {
+        switch self {
+        case .learn: return "[LEARN]"
+        case .drill: return "[DRILL]"
+        case .codex: return "[CODEX]"
+        }
+    }
+
+    var headerTitle: String {
+        switch self {
+        case .learn: return "LEARNING PROTOCOL"
+        case .drill: return "DRILL PROTOCOL"
+        case .codex: return "CODEX"
+        }
+    }
+}
+
 // MARK: - Preview root
 
 struct DesignPreview: View {
     @Environment(\.colorSchemeContrast) private var systemContrast
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    @State private var selectedTab: PreviewTab = .learn
+    @State private var showSysSheet = false
 
     // Preview overrides — nil means "use system value"
     var overrideHighContrast: Bool? = nil
@@ -44,64 +69,164 @@ struct DesignPreview: View {
             ZStack {
                 DesignSystem.Colors.background.ignoresSafeArea()
 
-                VStack(spacing: 0) {
-                    // ── Header ───────────────────────────────────────
-                    TerminalHeader(columns: cols, dimColor: dimColor)
+                if showSysSheet {
+                    // Full-screen dialog view depicting a floating box
+                    DOSDialogScreen(
+                        columns: cols,
+                        blockWidth: blockWidth,
+                        dimColor: dimColor,
+                        tappableColor: tappableColor,
+                        showDialog: $showSysSheet
+                    )
+                } else {
+                    VStack(spacing: 0) {
+                        AppBanner(
+                            columns: cols,
+                            dimColor: dimColor,
+                            tappableColor: tappableColor,
+                            showSysSheet: $showSysSheet
+                        )
                         .padding(.top, 16)
 
-                    // ── Batch rows ───────────────────────────────────
-                    ScrollView {
-                        VStack(spacing: 0) {
-                            ForEach(PreviewData.batches) { batch in
-                                TerminalBatchRow(
-                                    batch: batch,
-                                    columns: cols,
-                                    dimColor: dimColor,
-                                    tappableColor: tappableColor,
-                                    reduceMotion: isReduceMotion
-                                )
-                                .padding(.vertical, 10)
-                            }
+                        switch selectedTab {
+                        case .learn:
+                            LearnContent(
+                                columns: cols,
+                                dimColor: dimColor,
+                                tappableColor: tappableColor,
+                                reduceMotion: isReduceMotion
+                            )
+                        case .drill:
+                            PlaceholderContent(
+                                title: PreviewTab.drill.headerTitle,
+                                columns: cols,
+                                dimColor: dimColor
+                            )
+                        case .codex:
+                            PlaceholderContent(
+                                title: PreviewTab.codex.headerTitle,
+                                columns: cols,
+                                dimColor: dimColor
+                            )
                         }
-                        .padding(.top, 12)
-                        .padding(.bottom, 16)
-                    }
 
-                    // ── Tab bar ──────────────────────────────────────
-                    TerminalTabBar(columns: cols, dimColor: dimColor, tappableColor: tappableColor)
+                        TerminalTabBar(
+                            columns: cols,
+                            selectedTab: $selectedTab,
+                            dimColor: dimColor,
+                            tappableColor: tappableColor
+                        )
+                    }
+                    .frame(width: blockWidth, alignment: .center)
                 }
-                .frame(width: blockWidth, alignment: .center)
             }
         }
     }
 }
 
-// MARK: - Header
+// MARK: - Learn content
 
-private struct TerminalHeader: View {
+private struct LearnContent: View {
+    let columns: Int
+    let dimColor: Color
+    let tappableColor: Color
+    let reduceMotion: Bool
+
+    var body: some View {
+        ScreenHeader(title: "LEARNING PROTOCOL", columns: columns, dimColor: dimColor)
+
+        ScrollView {
+            VStack(spacing: 0) {
+                ForEach(PreviewData.batches) { batch in
+                    TerminalBatchRow(
+                        batch: batch,
+                        columns: columns,
+                        dimColor: dimColor,
+                        tappableColor: tappableColor,
+                        reduceMotion: reduceMotion
+                    )
+                    .padding(.vertical, 10)
+                }
+            }
+            .padding(.top, 12)
+            .padding(.bottom, 16)
+        }
+    }
+}
+
+// MARK: - Placeholder content (Drill / Codex)
+
+private struct PlaceholderContent: View {
+    let title: String
     let columns: Int
     let dimColor: Color
 
-    private static let headerTitle = "LEARNING PROTOCOL"
-    private var titleLength: Int { Self.headerTitle.count }
+    var body: some View {
+        ScreenHeader(title: title, columns: columns, dimColor: dimColor)
+
+        Spacer()
+    }
+}
+
+// MARK: - App banner
+
+/// Top-of-screen identity line shared across all tabs.
+/// Replaces the old top dashed rule in the header.
+/// NATO-1 ----------- [SYS]
+private struct AppBanner: View {
+    let columns: Int
+    let dimColor: Color
+    let tappableColor: Color
+    @Binding var showSysSheet: Bool
+
+    private static let appName = "NATO-1"
+    private static let sysLabel = "[SYS]"
+    // Fixed columns: app name + 1 space + 1 space + sys label
+    private static let fixedCols = appName.count + 1 + 1 + sysLabel.count
+
+    var body: some View {
+        let dashBudget = max(0, columns - Self.fixedCols)
+        let dashes = String(repeating: "-", count: dashBudget)
+        let bannerText = Self.appName + " " + dashes + " " + Self.sysLabel
+
+        // Render the full line in dim, then overlay the endpoints in their colors.
+        // App name is dim (not tappable); [SYS] is bright (tappable).
+        Button { showSysSheet.toggle() } label: {
+            Text(bannerText)
+                .terminalStyle(size: DesignSystem.Typography.minDimSize, color: dimColor)
+                .fixedSize()
+                .overlay(alignment: .trailing) {
+                    Text(Self.sysLabel)
+                        .terminalStyle(size: DesignSystem.Typography.minDimSize, color: tappableColor)
+                        .fixedSize()
+                }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("System settings")
+    }
+}
+
+// MARK: - Screen header
+
+/// Per-screen title line + bottom rule. Sits below the app banner.
+private struct ScreenHeader: View {
+    let title: String
+    let columns: Int
+    let dimColor: Color
+
+    private var titleLength: Int { title.count }
 
     // Title fits with dashes when columns >= title + 2 spaces + at least 2 dashes
     private var titleFitsWithDashes: Bool { columns >= titleLength + 4 }
-    private var titleFitsOnOneLine: Bool { columns >= titleLength }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Top rule
-            Text(String(repeating: "-", count: columns))
-                .terminalStyle(size: DesignSystem.Typography.minDimSize, color: dimColor)
-                .fixedSize()
-
             // Title line — Rule 4 fallback
             if titleFitsWithDashes {
                 dashedTitleLine
             } else {
                 // No dashes — title alone, wrapping if needed
-                Text(Self.headerTitle)
+                Text(title)
                     .font(DesignSystem.Typography.title)
                     .tracking(DesignSystem.Typography.tracking(for: DesignSystem.Typography.minDimSize))
                     .foregroundStyle(dimColor)
@@ -126,7 +251,7 @@ private struct TerminalHeader: View {
             Text(String(repeating: "-", count: leftDashes) + " ")
                 .terminalStyle(size: DesignSystem.Typography.minDimSize, color: dimColor)
                 .fixedSize()
-            Text(Self.headerTitle)
+            Text(title)
                 .font(DesignSystem.Typography.title)
                 .tracking(DesignSystem.Typography.tracking(for: DesignSystem.Typography.minDimSize))
                 .foregroundStyle(dimColor)
@@ -303,21 +428,190 @@ private struct DashedRule: View {
     }
 }
 
+// MARK: - DOS dialog
+
+/// Full-screen view depicting a DOS TUI dialog box.
+///
+/// FIXED HEADER: top border with title and [EXIT], pinned.
+/// SCROLLING DOCUMENT: bordered content rows (borders scroll WITH content),
+///   bottom border + shadow row at the very end.
+///
+/// At scroll-top the document's top edge aligns seamlessly with the fixed
+/// header's bottom edge, reading as one continuous box.
+private struct DOSDialogScreen: View {
+    let columns: Int
+    let blockWidth: CGFloat
+    let dimColor: Color
+    let tappableColor: Color
+    @Binding var showDialog: Bool
+
+    // Box-drawing characters
+    private static let tl = "╔", tr = "╗", bl = "╚", br = "╝"
+    private static let hz = "═", vt = "║"
+    private static let sh = "░"
+
+    private static let title = " SYSTEM SETTINGS "
+    private static let exitLabel = "[EXIT]"
+
+    // Shadow color: between background (#041302) and dim (#1C835B)
+    private static let shadowColor = Color(hex: "0A2A12")
+
+    // Box inset: 1 column per side from the screen block.
+    // Total row width = boxCols + 1 (shadow) must fit in columns.
+    private var boxCols: Int { max(0, columns - 2) }
+    // Inner content: box minus 2 border chars minus 2 padding spaces
+    private var innerCols: Int { max(0, boxCols - 4) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Spacer(minLength: 8)
+
+            // FIXED HEADER: top border, always visible
+            topBorderRow
+                .background(DesignSystem.Colors.background)
+
+            // SCROLLING DOCUMENT: bordered content + bottom border + shadow
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    contentRow(innerText: "")
+
+                    ForEach(RuleSpecimenSheet.specimens) { spec in
+                        // Specimen rule: truncate to exact inner column count
+                        let rule = String(spec.build(innerCols).prefix(innerCols))
+                        contentRow(innerText: rule)
+                        // Label: truncate to inner column count
+                        let label = String("\(spec.id). \(spec.name)".prefix(innerCols))
+                        contentRow(
+                            innerText: label,
+                            dimContent: true
+                        )
+                    }
+
+                    contentRow(innerText: "")
+
+                    // Bottom border (scrolls with content)
+                    bottomBorderRow
+
+                    // Shadow bottom row (scrolls with content)
+                    shadowBottomRow
+                }
+            }
+
+            Spacer(minLength: 8)
+        }
+        .frame(width: blockWidth)
+    }
+
+    // MARK: - Top border row (fixed, no shadow)
+
+    private var topBorderRow: some View {
+        let titleLen = Self.title.count
+        let exitLen = Self.exitLabel.count
+        let fixedLen = 2 + titleLen + exitLen
+        let fillLen = max(0, boxCols - fixedLen)
+        let leftFill = min(2, fillLen)
+        let rightFill = max(0, fillLen - leftFill)
+
+        let line = Self.tl
+            + String(repeating: Self.hz, count: leftFill)
+            + Self.title
+            + String(repeating: Self.hz, count: rightFill)
+            + Self.exitLabel
+            + Self.tr
+
+        return Button { showDialog = false } label: {
+            Text(line)
+                .terminalStyle(size: DesignSystem.Typography.minDimSize, color: dimColor)
+                .fixedSize()
+                .overlay(alignment: .trailing) {
+                    Text(Self.exitLabel + Self.tr)
+                        .terminalStyle(size: DesignSystem.Typography.minDimSize, color: dimColor)
+                        .fixedSize()
+                        .overlay(alignment: .leading) {
+                            Text(Self.exitLabel)
+                                .terminalStyle(size: DesignSystem.Typography.minDimSize, color: tappableColor)
+                                .fixedSize()
+                        }
+                }
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Content row
+
+    /// A single content row: ║ space content(padded) space ║ ░
+    /// Borders are ALWAYS full dimColor. Content may be dimmed independently.
+    private func contentRow(innerText: String, dimContent: Bool = false) -> some View {
+        let padded: String
+        if innerText.isEmpty {
+            padded = String(repeating: " ", count: innerCols)
+        } else {
+            let pad = max(0, innerCols - innerText.count)
+            padded = innerText + String(repeating: " ", count: pad)
+        }
+
+        // Build the full row as three pieces to keep border color independent
+        return HStack(alignment: .firstTextBaseline, spacing: 0) {
+            // Left border
+            Text(Self.vt + " ")
+                .terminalStyle(size: DesignSystem.Typography.minDimSize, color: dimColor)
+                .fixedSize()
+
+            // Inner content (may be dimmed)
+            Text(padded)
+                .terminalStyle(size: DesignSystem.Typography.minDimSize, color: dimColor)
+                .fixedSize()
+                .opacity(dimContent ? 0.6 : 1.0)
+
+            // Right border + shadow
+            Text(" " + Self.vt)
+                .terminalStyle(size: DesignSystem.Typography.minDimSize, color: dimColor)
+                .fixedSize()
+            Text(Self.sh)
+                .terminalStyle(size: DesignSystem.Typography.minDimSize, color: Self.shadowColor)
+                .fixedSize()
+        }
+    }
+
+    // MARK: - Bottom border row (with shadow)
+
+    private var bottomBorderRow: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 0) {
+            Text(Self.bl + String(repeating: Self.hz, count: max(0, boxCols - 2)) + Self.br)
+                .terminalStyle(size: DesignSystem.Typography.minDimSize, color: dimColor)
+                .fixedSize()
+            Text(Self.sh)
+                .terminalStyle(size: DesignSystem.Typography.minDimSize, color: Self.shadowColor)
+                .fixedSize()
+        }
+    }
+
+    // MARK: - Shadow bottom row
+
+    private var shadowBottomRow: some View {
+        let line = " " + String(repeating: Self.sh, count: boxCols)
+        return Text(line)
+            .terminalStyle(size: DesignSystem.Typography.minDimSize, color: Self.shadowColor)
+            .fixedSize()
+    }
+}
+
 // MARK: - Tab bar
 
 private struct TerminalTabBar: View {
     let columns: Int
+    @Binding var selectedTab: PreviewTab
     let dimColor: Color
     let tappableColor: Color
 
-    // Column counts for each label (brackets included)
-    private static let labels = ["[LEARN]", "[DRILL]", "[CODEX]"]
     // Minimum columns: all three labels + 1 space between each pair
     private static let minSingleLineColumns: Int = {
-        labels.map(\.count).reduce(0, +) + (labels.count - 1)
+        PreviewTab.allCases.map(\.label.count).reduce(0, +) + (PreviewTab.allCases.count - 1)
     }()
 
     private var fitsOnOneLine: Bool { columns >= Self.minSingleLineColumns }
+
+    private let haptic = UIImpactFeedbackGenerator(style: .light)
 
     var body: some View {
         VStack(spacing: 0) {
@@ -336,55 +630,426 @@ private struct TerminalTabBar: View {
 
     private var horizontalTabs: some View {
         HStack {
-            learnChip
+            tabButton(for: .learn)
             Spacer()
-            drillLabel
+            tabButton(for: .drill)
             Spacer()
-            codexLabel
+            tabButton(for: .codex)
         }
     }
 
     private var verticalTabs: some View {
         VStack(alignment: .leading, spacing: 4) {
-            learnChip
-            drillLabel
-            codexLabel
+            tabButton(for: .learn)
+            tabButton(for: .drill)
+            tabButton(for: .codex)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var learnChip: some View {
-        Text("[LEARN]")
-            .terminalStyle(
-                size: DesignSystem.Typography.minDimSize,
-                color: DesignSystem.Colors.background
-            )
-            .textCase(.uppercase)
-            .fixedSize()
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .background(dimColor)
+    @ViewBuilder
+    private func tabButton(for tab: PreviewTab) -> some View {
+        let isSelected = selectedTab == tab
+
+        Button {
+            if selectedTab != tab {
+                haptic.impactOccurred()
+                selectedTab = tab
+            }
+        } label: {
+            if isSelected {
+                Text(tab.label)
+                    .terminalChip(
+                        textColor: DesignSystem.Colors.background,
+                        backgroundColor: dimColor
+                    )
+            } else {
+                Text(tab.label)
+                    .terminalStyle(
+                        size: DesignSystem.Typography.minDimSize,
+                        color: tappableColor
+                    )
+                    .textCase(.uppercase)
+                    .fixedSize()
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(tab.rawValue)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
+// MARK: - Rule specimen sheet
+
+private struct RuleSpecimen: Identifiable {
+    let id: Int
+    let name: String
+    /// A closure that builds the rule string for a given column count.
+    let build: (Int) -> String
+}
+
+private struct RuleSpecimenSheet: View {
+    let columns: Int
+    let dimColor: Color
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("RULE SPECIMENS")
+                    .terminalStyle(size: DesignSystem.Typography.minDimSize, color: dimColor, weight: .bold)
+                    .fixedSize()
+                    .padding(.top, 8)
+                    .padding(.bottom, 12)
+
+                ForEach(Self.specimens) { spec in
+                    // Rule line
+                    Text(spec.build(columns))
+                        .terminalStyle(size: DesignSystem.Typography.minDimSize, color: dimColor)
+                        .fixedSize()
+
+                    // Label
+                    Text("\(spec.id). \(spec.name)")
+                        .terminalStyle(size: DesignSystem.Typography.minDimSize, color: dimColor)
+                        .fixedSize()
+                        .opacity(0.6)
+                        .padding(.bottom, 12)
+                }
+            }
+            .padding(.bottom, 32)
+        }
     }
 
-    private var drillLabel: some View {
-        Text("[DRILL]")
-            .terminalStyle(
-                size: DesignSystem.Typography.minDimSize,
-                color: tappableColor
-            )
-            .textCase(.uppercase)
-            .fixedSize()
+    // Helper: repeat a unit to fill columns exactly
+    private static func fill(_ unit: String, cols: Int) -> String {
+        let unitLen = unit.count
+        guard unitLen > 0, cols > 0 else { return "" }
+        let fullRepeats = cols / unitLen
+        let remainder = cols % unitLen
+        return String(repeating: unit, count: fullRepeats) + String(unit.prefix(remainder))
     }
 
-    private var codexLabel: some View {
-        Text("[CODEX]")
-            .terminalStyle(
-                size: DesignSystem.Typography.minDimSize,
-                color: tappableColor
-            )
-            .textCase(.uppercase)
-            .fixedSize()
+    // Helper: repeat a unit to fill, but trim to exact column count
+    private static func repeat_exact(_ char: Character, cols: Int) -> String {
+        String(repeating: char, count: cols)
     }
+
+    // Helper: spaced repeat (char + space), filling cols
+    private static func spaced(_ char: Character, cols: Int) -> String {
+        fill(String(char) + " ", cols: cols)
+    }
+
+    // Helper: end-capped rule
+    private static func capped(_ left: String, _ fill_char: Character, _ right: String, cols: Int) -> String {
+        let innerCols = max(0, cols - left.count - right.count)
+        return left + String(repeating: fill_char, count: innerCols) + right
+    }
+
+    static let specimens: [RuleSpecimen] = [
+        // ── Simple repeats ──────────────────────────────────
+        RuleSpecimen(id: 1, name: "hyphen") { cols in
+            repeat_exact("-", cols: cols)
+        },
+        RuleSpecimen(id: 2, name: "equals") { cols in
+            repeat_exact("=", cols: cols)
+        },
+        RuleSpecimen(id: 3, name: "underscore") { cols in
+            repeat_exact("_", cols: cols)
+        },
+        RuleSpecimen(id: 4, name: "period") { cols in
+            repeat_exact(".", cols: cols)
+        },
+        RuleSpecimen(id: 5, name: "tilde") { cols in
+            repeat_exact("~", cols: cols)
+        },
+        RuleSpecimen(id: 6, name: "asterisk") { cols in
+            repeat_exact("*", cols: cols)
+        },
+        RuleSpecimen(id: 7, name: "plus") { cols in
+            repeat_exact("+", cols: cols)
+        },
+        RuleSpecimen(id: 8, name: "hash") { cols in
+            repeat_exact("#", cols: cols)
+        },
+        RuleSpecimen(id: 9, name: "colon") { cols in
+            repeat_exact(":", cols: cols)
+        },
+        RuleSpecimen(id: 10, name: "semicolon") { cols in
+            repeat_exact(";", cols: cols)
+        },
+        RuleSpecimen(id: 11, name: "pipe") { cols in
+            repeat_exact("|", cols: cols)
+        },
+        RuleSpecimen(id: 12, name: "forward slash") { cols in
+            repeat_exact("/", cols: cols)
+        },
+        RuleSpecimen(id: 13, name: "backslash") { cols in
+            repeat_exact("\\", cols: cols)
+        },
+        RuleSpecimen(id: 14, name: "caret") { cols in
+            repeat_exact("^", cols: cols)
+        },
+        RuleSpecimen(id: 15, name: "backtick") { cols in
+            repeat_exact("`", cols: cols)
+        },
+        RuleSpecimen(id: 16, name: "single quote") { cols in
+            repeat_exact("'", cols: cols)
+        },
+        RuleSpecimen(id: 17, name: "double quote") { cols in
+            repeat_exact("\"", cols: cols)
+        },
+
+        // ── Spaced repeats ──────────────────────────────────
+        RuleSpecimen(id: 18, name: "spaced hyphen") { cols in
+            spaced("-", cols: cols)
+        },
+        RuleSpecimen(id: 19, name: "spaced equals") { cols in
+            spaced("=", cols: cols)
+        },
+        RuleSpecimen(id: 20, name: "spaced period") { cols in
+            spaced(".", cols: cols)
+        },
+        RuleSpecimen(id: 21, name: "spaced tilde") { cols in
+            spaced("~", cols: cols)
+        },
+        RuleSpecimen(id: 22, name: "spaced asterisk") { cols in
+            spaced("*", cols: cols)
+        },
+        RuleSpecimen(id: 23, name: "spaced plus") { cols in
+            spaced("+", cols: cols)
+        },
+        RuleSpecimen(id: 24, name: "spaced hash") { cols in
+            spaced("#", cols: cols)
+        },
+        RuleSpecimen(id: 25, name: "spaced colon") { cols in
+            spaced(":", cols: cols)
+        },
+        RuleSpecimen(id: 26, name: "spaced pipe") { cols in
+            spaced("|", cols: cols)
+        },
+        RuleSpecimen(id: 27, name: "spaced caret") { cols in
+            spaced("^", cols: cols)
+        },
+
+        // ── Double-character units ──────────────────────────
+        RuleSpecimen(id: 28, name: "double hyphen") { cols in
+            fill("--", cols: cols)
+        },
+        RuleSpecimen(id: 29, name: "double plus") { cols in
+            fill("++", cols: cols)
+        },
+        RuleSpecimen(id: 30, name: "double equals") { cols in
+            fill("==", cols: cols)
+        },
+        RuleSpecimen(id: 31, name: "double underscore") { cols in
+            fill("__", cols: cols)
+        },
+        RuleSpecimen(id: 32, name: "double tilde") { cols in
+            fill("~~", cols: cols)
+        },
+        RuleSpecimen(id: 33, name: "double asterisk") { cols in
+            fill("**", cols: cols)
+        },
+
+        // ── Alternating pairs ───────────────────────────────
+        RuleSpecimen(id: 34, name: "hyphen-plus") { cols in
+            fill("-+", cols: cols)
+        },
+        RuleSpecimen(id: 35, name: "hyphen-equals") { cols in
+            fill("-=", cols: cols)
+        },
+        RuleSpecimen(id: 36, name: "hyphen-period") { cols in
+            fill("-.", cols: cols)
+        },
+        RuleSpecimen(id: 37, name: "hyphen-asterisk") { cols in
+            fill("-*", cols: cols)
+        },
+        RuleSpecimen(id: 38, name: "hyphen-tilde") { cols in
+            fill("-~", cols: cols)
+        },
+        RuleSpecimen(id: 39, name: "equals-plus") { cols in
+            fill("=+", cols: cols)
+        },
+        RuleSpecimen(id: 40, name: "period-colon") { cols in
+            fill(".:", cols: cols)
+        },
+        RuleSpecimen(id: 41, name: "period-space") { cols in
+            fill(". ", cols: cols)
+        },
+        RuleSpecimen(id: 42, name: "colon-space") { cols in
+            fill(": ", cols: cols)
+        },
+
+        // ── Three-character cycles ──────────────────────────
+        RuleSpecimen(id: 43, name: "hyphen-plus-hyphen") { cols in
+            fill("-+-", cols: cols)
+        },
+        RuleSpecimen(id: 44, name: "equals-asterisk-equals") { cols in
+            fill("=*=", cols: cols)
+        },
+        RuleSpecimen(id: 45, name: "period-colon-period") { cols in
+            fill(".:.", cols: cols)
+        },
+        RuleSpecimen(id: 46, name: "tilde-hyphen-tilde") { cols in
+            fill("~-~", cols: cols)
+        },
+        RuleSpecimen(id: 47, name: "plus-equals-plus") { cols in
+            fill("+=+", cols: cols)
+        },
+        RuleSpecimen(id: 48, name: "hyphen-space-hyphen") { cols in
+            fill("- -", cols: cols)
+        },
+        RuleSpecimen(id: 49, name: "equals-space-equals") { cols in
+            fill("= =", cols: cols)
+        },
+        RuleSpecimen(id: 50, name: "hash-hyphen-hash") { cols in
+            fill("#-#", cols: cols)
+        },
+
+        // ── Bracket-flanked ─────────────────────────────────
+        RuleSpecimen(id: 51, name: "square bracket hyphen") { cols in
+            capped("[", "-", "]", cols: cols)
+        },
+        RuleSpecimen(id: 52, name: "square bracket equals") { cols in
+            capped("[", "=", "]", cols: cols)
+        },
+        RuleSpecimen(id: 53, name: "curly bracket equals") { cols in
+            capped("{", "=", "}", cols: cols)
+        },
+        RuleSpecimen(id: 54, name: "paren tilde") { cols in
+            capped("(", "~", ")", cols: cols)
+        },
+        RuleSpecimen(id: 55, name: "angle bracket hyphen") { cols in
+            capped("<", "-", ">", cols: cols)
+        },
+
+        // ── End-capped ──────────────────────────────────────
+        RuleSpecimen(id: 56, name: "plus-capped hyphen") { cols in
+            capped("+", "-", "+", cols: cols)
+        },
+        RuleSpecimen(id: 57, name: "angle-capped hyphen") { cols in
+            capped(">", "-", "<", cols: cols)
+        },
+        RuleSpecimen(id: 58, name: "pipe-capped hyphen") { cols in
+            capped("|", "-", "|", cols: cols)
+        },
+        RuleSpecimen(id: 59, name: "hash-capped hyphen") { cols in
+            capped("#", "-", "#", cols: cols)
+        },
+        RuleSpecimen(id: 60, name: "asterisk-capped hyphen") { cols in
+            capped("*", "-", "*", cols: cols)
+        },
+        RuleSpecimen(id: 61, name: "plus-capped equals") { cols in
+            capped("+", "=", "+", cols: cols)
+        },
+        RuleSpecimen(id: 62, name: "pipe-capped equals") { cols in
+            capped("|", "=", "|", cols: cols)
+        },
+
+        // ── Terminal-flavored ───────────────────────────────
+        RuleSpecimen(id: 63, name: "chevron repeat") { cols in
+            repeat_exact(">", cols: cols)
+        },
+        RuleSpecimen(id: 64, name: "spaced chevron") { cols in
+            spaced(">", cols: cols)
+        },
+        RuleSpecimen(id: 65, name: "dollar repeat") { cols in
+            repeat_exact("$", cols: cols)
+        },
+        RuleSpecimen(id: 66, name: "spaced dollar") { cols in
+            spaced("$", cols: cols)
+        },
+        RuleSpecimen(id: 67, name: "at sign repeat") { cols in
+            repeat_exact("@", cols: cols)
+        },
+        RuleSpecimen(id: 68, name: "ampersand repeat") { cols in
+            repeat_exact("&", cols: cols)
+        },
+        RuleSpecimen(id: 69, name: "percent repeat") { cols in
+            repeat_exact("%", cols: cols)
+        },
+        RuleSpecimen(id: 70, name: "exclamation repeat") { cols in
+            repeat_exact("!", cols: cols)
+        },
+
+        // ── Density plays ───────────────────────────────────
+        RuleSpecimen(id: 71, name: "sparse hyphen (3-space)") { cols in
+            fill("-   ", cols: cols)
+        },
+        RuleSpecimen(id: 72, name: "sparse period (3-space)") { cols in
+            fill(".   ", cols: cols)
+        },
+        RuleSpecimen(id: 73, name: "sparse asterisk (3-space)") { cols in
+            fill("*   ", cols: cols)
+        },
+        RuleSpecimen(id: 74, name: "medium hyphen (2-space)") { cols in
+            fill("-  ", cols: cols)
+        },
+        RuleSpecimen(id: 75, name: "medium period (2-space)") { cols in
+            fill(".  ", cols: cols)
+        },
+        RuleSpecimen(id: 76, name: "asymmetric dot-dash") { cols in
+            fill(". --", cols: cols)
+        },
+        RuleSpecimen(id: 77, name: "morse-style dot-dash") { cols in
+            fill(".-", cols: cols)
+        },
+        RuleSpecimen(id: 78, name: "morse spaced") { cols in
+            fill(". - ", cols: cols)
+        },
+
+        // ── Multi-character patterns ────────────────────────
+        RuleSpecimen(id: 79, name: "arrow right") { cols in
+            fill("->", cols: cols)
+        },
+        RuleSpecimen(id: 80, name: "arrow left") { cols in
+            fill("<-", cols: cols)
+        },
+        RuleSpecimen(id: 81, name: "bidirectional arrow") { cols in
+            fill("<->", cols: cols)
+        },
+        RuleSpecimen(id: 82, name: "zigzag /\\") { cols in
+            fill("/\\", cols: cols)
+        },
+        RuleSpecimen(id: 83, name: "zigzag \\/") { cols in
+            fill("\\/", cols: cols)
+        },
+        RuleSpecimen(id: 84, name: "wave /~") { cols in
+            fill("/~", cols: cols)
+        },
+        RuleSpecimen(id: 85, name: "fence ||--") { cols in
+            fill("||--", cols: cols)
+        },
+        RuleSpecimen(id: 86, name: "railroad |-") { cols in
+            fill("|-", cols: cols)
+        },
+        RuleSpecimen(id: 87, name: "ladder |=") { cols in
+            fill("|=", cols: cols)
+        },
+        RuleSpecimen(id: 88, name: "barbed wire -<>-") { cols in
+            fill("-<>-", cols: cols)
+        },
+        RuleSpecimen(id: 89, name: "chain -o-") { cols in
+            fill("-o-", cols: cols)
+        },
+        RuleSpecimen(id: 90, name: "dash dot dot") { cols in
+            fill("-..  ", cols: cols)
+        },
+        RuleSpecimen(id: 91, name: "section marker --+--") { cols in
+            fill("--+--", cols: cols)
+        },
+        RuleSpecimen(id: 92, name: "ticker tape -|") { cols in
+            fill("-|", cols: cols)
+        },
+        RuleSpecimen(id: 93, name: "circuit --||--") { cols in
+            fill("--||--", cols: cols)
+        },
+        RuleSpecimen(id: 94, name: "crosshatch #-") { cols in
+            fill("#-", cols: cols)
+        },
+        RuleSpecimen(id: 95, name: "frequency .:':") { cols in
+            fill(".:'.:", cols: cols)
+        },
+    ]
 }
 
 // MARK: - Preview data (static, not wired to NATOData)
