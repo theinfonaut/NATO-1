@@ -1,6 +1,6 @@
 # NATO-1
 ## App Design Specification
-**Version 0.1 — Working document**
+**Version 0.2 — Working document** (DOS terminal direction decided; character-grid layout system established)
 
 ---
 
@@ -167,17 +167,19 @@ The Codebook is a progress view — watching letters climb toward Mastered is a 
 
 ---
 
-## 7. Visual direction
+## 7. Visual direction — DOS terminal [DECIDED]
 
-Visual direction is not yet decided. The following captures explorations, inspirations, and principles identified so far.
+The visual direction is decided: a monochrome green-phosphor **DOS terminal** aesthetic. Monospace type on a near-black green background, character-grid layout throughout. This is a restyle of the original card-based design — navigation structure, screen layouts, content, and copy are unchanged; the palette, font, and grid are applied on top. (Codebook is renamed Codex.)
 
-### Aesthetic direction — under exploration
+The earlier exploration of tool/aviation/instrument directions (warm off-white, dark/amber, pure monochrome) is retained below for history but is superseded by the terminal direction.
+
+### Aesthetic direction — earlier exploration (superseded)
 
 The working aesthetic direction draws from tools, aviation, and navigation instruments. Think cockpit displays, nautical charts, field radios, topographic maps, and precision measuring equipment. UI elements should feel like physical controls — stamped, labelled, purposeful. This is conceptually appropriate given the NATO phonetic alphabet's origins in radio communication and aviation.
 
 Key references explored: Teenage Engineering product design, Dieter Rams / Braun industrial design. Both share restraint, confidence, and a design language where every element earns its place.
 
-### Prototype directions explored
+### Prototype directions explored (superseded by the terminal direction)
 
 - **Direction A — warm off-white / burnt orange:** Braun-inspired palette, monospaced type, progress meter as segmented pips. Name treatment: AlphaBravoCharlie.
 - **Direction B — dark header / amber accent:** black header band with large wordmark, warm gray body, amber accent on active states and badges. Name treatment: NATO-1.
@@ -204,6 +206,30 @@ Key references explored: Teenage Engineering product design, Dieter Rams / Braun
 ### Name — not decided
 
 Working name: NATO-1. Final name requires App Store strategy and naming research. Candidates considered: NATO-1, AlphaBravoCharlie, Foxtrot, Callsign, LEARN NATO. Note: Callsign is already used in the App Store.
+
+### Terminal visual system [DECIDED]
+
+**Color**
+- Background: `#041302`
+- Tappable (bright): `#12F6A1`
+- Untappable (dim): `#1C835B`
+
+Core rule: **brightness encodes affordance.** Bright means tappable now; dim means not. This governs every color choice. Under iOS Increase Contrast, both greens shift up together, preserving a visible gap — never collapse dim up to bright. A red family (brick / orange / brown) is reserved for errors and corrections only.
+
+**Typography**
+- Font: Intel One Mono (bundled, all weights in repo; Regular + Bold in use).
+- Interface text is all caps, ~0.08em tracking.
+- Bold is used only for title emphasis, never as an affordance signal — brightness alone carries tappability.
+
+**Motion**
+- Cursor blink: ~530ms per phase (1.06s cycle), step timing not fade. Only the `>` advance glyph blinks. Holds solid under Reduce Motion.
+
+**Control grammar (system-wide)**
+- `[BRACKETED]` chips = discrete controls (tabs, actions).
+- A bright line with a trailing blinking `>` = advance/continue, and the line itself is the tap target.
+- `!` = locked, tappable (opens the paywall / unlock explanation).
+
+**App identity line.** Every top-level screen carries an app identity line as its top line: `NATO-1 --------------------- [SYS]`. App name dim and left-aligned, `[SYS]` bright and right-aligned, hyphens filling between via the column math. App-level (identical on all tabs); the entry point to system settings.
 
 ### Layout Rules
 
@@ -249,6 +275,64 @@ functional but not elegant. A better approach is progressive abbreviation
 terminal-authentic. Deferred because abbreviation is content-specific and must
 be decided per screen, whereas wrapping is content-agnostic and works
 system-wide. Revisit once Meet, Quiz, and Codex layouts are designed.
+
+#### Header variation (idea, not yet designed)
+
+Each top-level screen should have its own header treatment rather than all three
+using the identical dashed-rule-and-centered-title pattern. The variation is
+meant to make moving between screens feel more alive, and reflects how real
+terminal programs each had their own banner style rather than a shared chrome.
+
+Constraints: all headers stay on the character grid, use only the two greens,
+and occupy roughly the same vertical space so the content below starts at a
+consistent position. Variation is in the pattern, not the size.
+
+Not yet designed. Revisit when Drill and Codex get real layouts.
+
+#### Learn tab layout [DECIDED]
+
+Top to bottom: app identity line; screen header (dashed rule, bold centered `LEARNING PROTOCOL` with flanking dashes to the edges, dashed rule); seven batch rows; tab bar.
+
+Batch row: `BATCH N` + dim dotted leader + letters (unspaced, e.g. `ABCD`) + trailing glyph. Active batch is bright with a blinking `>`; locked batches are dim with a bright `!`. Leader dots are always dim, period + single space, and stay phase-aligned across rows (remainder padding trails; the leader ends on a period).
+
+Tab bar: `[LEARN] [DRILL] [CODEX]` distributed edge to edge. The active tab is a dim-fill chip with no horizontal padding (fill hugs the character cells exactly, like inverse video). All-caps chips need slightly more top than bottom vertical padding for optical centering, scaled with type size. Light haptic on tab switch.
+
+#### System settings dialog (SYS) [DECIDED]
+
+App-wide settings, reached via `[SYS]` in the app identity line. Presented as a DOS TUI dialog box — a bordered box with a drop shadow, in the style of Turbo Pascal / Norton Commander. While open, the three tab chips are hidden (it's a layer you're inside of, not a peer destination) and `[SYS]` becomes `[EXIT]`.
+
+- Implemented as a standalone view that *depicts* a floating box (background fills around it), not a composited overlay.
+- Box and shadow are one monospaced character grid. The shadow is an L offset one cell down and one cell right (a column down the right edge, a row along the bottom), drawn as characters.
+- Scroll model: fixed header + scrolling document. The top border line (`+=== SYSTEM SETTINGS ===...===[EXIT]===+`) stays pinned so `[EXIT]` is always reachable; below it the content scrolls as one long bordered sheet with the left/right borders scrolling with it and the bottom border appearing only at the end. The document's top edge aligns seamlessly under the fixed header.
+- Border characters are always the single dim frame color; never inherit the color of an adjacent content row.
+- (In progress at time of writing: the dialog's content is a temporary specimen sheet of ~95 divider styles being browsed to choose from.)
+
+#### Status line [OPEN — highest-leverage next item]
+
+A single bright line under the Learn header showing the ONE most important next action, and it is the primary tap target. Priority: resume an interrupted session → reviews due → start the next batch. Examples: `> RESUME BATCH 1 — MEET`, `> 12 DUE FOR DRILL`, `> START BATCH 2`. Replaces both the Resume card and the progress bar. Resolves several undesigned states at once.
+
+#### Undesigned Learn-tab states [OPEN]
+
+States the status line and a new row state must cover: session in progress; batch complete → next unlocked (needs a "done" row state + glyph — rows are currently only active or locked); reviews due; paywall; all complete; the old settings gear and progress indicator.
+
+#### Batch 1 explainer (first run) [OPEN]
+
+Shown once ever (UserDefaults flag). Needs designing against the column grid (body wraps at the column count and prints character-by-character across wrapped lines). Sequence: header prints → block cursor blinks alone ~1.5s → body prints ~30 char/sec → pause → closing line appears bright with a blinking `>`, and that line is the tap target to advance to Meet. Reduce Motion shows the full text at once. Copy:
+
+    INITIATING LEARNING PROTOCOL
+    BATCH 1: A B C D
+
+    MEET EACH LETTER AND ITS CODE WORD. AN ASSOCIATION STORY WRITES IT TO MEMORY FASTER. THEN QUIZ YOUR NEW MEMORY....
+
+    RECALL IS THE MISSION >
+
+#### Landing tab changes over time [OPEN]
+
+Learn is the landing tab during learning; once all batches are complete, Drill should probably become the landing tab. Revisit with the "all complete" state.
+
+#### Migration note (prototype → real app)
+
+The restyled Learn tab currently lives in `DesignPreview.swift` with hardcoded data, deliberately separate from the real `LearnHomeView` so layout bugs couldn't hide behind data/logic bugs. SwiftUI has no CSS-style separation of structure from style — appearance is the view code — so migration means moving the restyled structure into `LearnHomeView`, swapping `PreviewData` for the real AppState/NATOData, and extracting shared components (TerminalBatchRow, DashedRule, tab bar, dialog) into their own file so the preview and real views share one copy. Now that layout is solid, this is mostly mechanical.
 
 ---
 
@@ -380,9 +464,9 @@ Words use only letters from unlocked batches. All spellings verified. Batch 1 ha
 - **Mastery celebration screen** [OPEN] — One-time special screen when all 26 letters hit Mastered. Design TBD.
 - **Onboarding** [OPEN] — First-launch experience not yet designed.
 - **Paywall and IAP flow** [OPEN] — Locked batch experience and purchase flow not yet designed.
-- **Codebook design** [OPEN] — Current prototype is a placeholder list. Visual design TBD.
+- **Codex design** [OPEN] — Renamed from Codebook. DOS-terminal visual pass TBD; the dotted-leader directory row format is a candidate.
 - **App Store strategy and name** [OPEN] — Naming, positioning, screenshot strategy, and search strategy TBD.
-- **Visual direction** [OPEN] — Three prototype directions explored. Not yet decided. See section 7.
+- **Visual direction** [DECIDED] — DOS terminal. See section 7.
 - **Listening practice** [OPEN] — Future version: user hears a NATO word spoken aloud and identifies the letter. The reverse skill — easier than production but useful for comprehension.
 - **Microphone input button** [OPEN] — Future version: a large prominent microphone button allows spoken responses via phone STT, making the app feel closer to real radio/voice practice.
 - **App Store screenshot strategy** [OPEN] — Content and order TBD.
