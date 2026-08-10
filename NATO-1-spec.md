@@ -307,19 +307,62 @@ App-wide settings, reached via `[SYS]` in the app identity line. Presented as a 
 - Border characters are always the single dim frame color; never inherit the color of an adjacent content row.
 - (In progress at time of writing: the dialog's content is a temporary specimen sheet of ~95 divider styles being browsed to choose from.)
 
-#### Status line [OPEN — highest-leverage next item]
+#### Status line → Next-Step Prompt Box [DECIDED]
 
-A single bright line under the Learn header showing the ONE most important next action, and it is the primary tap target. Priority: resume an interrupted session → reviews due → start the next batch. Examples: `> RESUME BATCH 1 — MEET`, `> 12 DUE FOR DRILL`, `> START BATCH 2`. Replaces both the Resume card and the progress bar. Resolves several undesigned states at once.
+Originally an open item called "Status line." Now designed and built as the Next-Step Prompt Box — see the dedicated section below.
 
-#### Undesigned Learn-tab states [OPEN]
+#### Undesigned Learn-tab states → resolved
 
-States the status line and a new row state must cover: session in progress; batch complete → next unlocked (needs a "done" row state + glyph — rows are currently only active or locked); reviews due; paywall; all complete; the old settings gear and progress indicator.
+The batch-row redesign (five states) and the prompt box together cover: session in progress, batch complete → next unlocked, reviews due, paywall, all complete. The old Resume card and progress bar are replaced. Remaining open items: locked pop-over copy/design, paywall screen.
+
+### Learn Tab — Next-Step Prompt Box
+
+Status: DECIDED (visual styling done; drives off real state at integration)
+
+A single prompt above the batch list, below the LEARNING PROTOCOL header, showing the ONE highest-priority next action. Progress lives on the batch rows; this box carries only the next action. Onboarding is NOT this box's job — a separate welcome experience (before the Learn screen) handles that.
+
+Priority order (shows the highest-priority true state, silent on the rest):
+1. Drills due now
+2. Resume in-progress batch
+3. Start next available batch
+4. Unlock (available batches done, rest locked)
+5. All clear (nothing due — shows countdown to next review)
+
+State copy:
+- `> BEGIN BATCH 1` — start / first available
+- `> RESUME BATCH 3` — in progress
+- `> DRILL [6 DUE]` — drills due (bracketed count; bracket ok as the prompt is tappable)
+- `> BEGIN BATCH 4` — start next available
+- `> UNLOCK FULL ALPHABET` — unlock (price NOT shown here; paywall owns price)
+- `ALL CLEAR · NEXT DRILL IN 3H 20M` — all clear (dim, NO caret; passive status)
+
+Behavior:
+- Tapping the box deep-links directly into the named action (drill session, the batch, the paywall) — not just a tab switch. Applies to all actionable states.
+- The box is present from first view (post-welcome).
+
+Styling:
+- Content is center-aligned for all states. If a line is too wide at large Dynamic Type it wraps to two centered lines.
+- Actionable states (1–4) are bright, led by a ">" caret. ALL CLEAR is dim with no caret (passive, like COMPLETE on the rows).
+- A horizontal rule sits below the box, separating it from the batch list. No rule above (header's rule provides the top edge).
+- Price is never shown in the box; the paywall is the single source of localized price truth.
+
+Paywall copy (banked; screen not yet designed):
+$4.99. ONCE. FOREVER. / NO ADS. / NO SUBSCRIPTION.
+(Price shown on the paywall should come from StoreKit's localized value, not hardcoded.)
+
+OPEN: box visual could get motion polish later (character-cycling caret; letter-sweep on state arrival). The two locked-row pop-overs and the paywall screen are also still open.
+
+### Caret Blink System (cross-component)
+
+Status: DECIDED
+
+All blinking carets (batch-row LEARN/RESUME markers, prompt-box caret) derive their state from ONE shared time source, so they stay in phase. That shared source is also the single place Reduce Motion is handled — when on, all carets rest steady at the bright level. Blink style is dim↔bright pulse (oscillates between the bright and dim greens; the glyph never fully hides), not on/off. Don't give carets their own independent timers or independent Reduce Motion checks.
 
 ### Learn Tab — Batch Rows
 
 Status: DECIDED (pop-over copy and design still OPEN)
 
-Each batch row shows per-batch status via a right-aligned marker. Progress lives on the rows (distributed, all visible at once); the status line carries only the single next action (see Status Line section).
+Each batch row shows per-batch status via a right-aligned marker. Progress lives on the rows (distributed, all visible at once); the prompt box carries only the single next action (see Next-Step Prompt Box section above).
 
 #### State rules (decisions)
 
