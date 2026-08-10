@@ -162,7 +162,8 @@ private struct LearnContent: View {
                         dimColor: dimColor,
                         tappableColor: tappableColor,
                         reduceMotion: reduceMotion,
-                        onTap: batch.id == 1 ? onBatch1Tap : nil
+                        // TEMPORARY: wire briefing preview to the [LEARN] batch
+                        onTap: batch.state == .learn ? onBatch1Tap : nil
                     )
                     .padding(.vertical, 10)
                 }
@@ -300,20 +301,49 @@ private struct TerminalBatchRow: View {
     // TEMPORARY preview-only: optional tap handler for navigation.
     var onTap: (() -> Void)? = nil
 
-    private var isActive: Bool { batch.state == .active }
-    private var nameColor: Color   { isActive ? tappableColor : dimColor }
-    private var letterColor: Color { isActive ? tappableColor : dimColor }
+    // ── Status markers ──
+    // Each marker is its actual width — no fixed slug padding.
+    // The dot leader fills to each marker's true length, so shorter
+    // markers get more dots and longer markers get fewer.
 
-    private var nameString: String { "BATCH \(batch.number) " }
-    private var lettersString: String { " " + batch.lettersDisplay + " " }
-    private var glyphString: String { batch.state == .active ? ">" : "!" }
-
-    private var fixedColumns: Int {
-        nameString.count + lettersString.count + glyphString.count
+    /// The display text for the status marker. COMPLETE is bare (no brackets);
+    /// all others are bracketed to signal tappability.
+    private var markerText: String {
+        switch batch.state {
+        case .complete:       return "COMPLETE"
+        case .learn:          return "[LEARN >]"
+        case .resume:         return "[RESUME >]"
+        case .locked:         return "[LOCKED]"
+        case .purchaseLocked: return "[$ LOCKED]"
+        }
     }
 
+    /// Whether the row uses bright/tappable color.
+    private var isBright: Bool {
+        batch.state == .learn || batch.state == .resume
+    }
+
+    /// Whether the marker has a blinking ">" caret.
+    private var hasBlinkingCaret: Bool {
+        batch.state == .learn || batch.state == .resume
+    }
+
+    private var rowColor: Color { isBright ? tappableColor : dimColor }
+    private var markerColor: Color { isBright ? tappableColor : dimColor }
+
+    // Left side: "BATCH # " + letters + " " (space before leader starts)
+    private var nameString: String { "BATCH \(batch.number) " }
+    private var leftText: String { nameString + batch.lettersDisplay + " " }
+
+    // Fixed columns: left text + marker's actual width
+    private var fixedColumns: Int { leftText.count + markerText.count }
+
+    // ── Popover state (stub) ──
+    @State private var showLockedPopover = false
+    @State private var showPurchasePopover = false
+
     var body: some View {
-        Button(action: { onTap?() }) {
+        Button(action: handleTap) {
             if fixedColumns <= columns {
                 singleLineContent
             } else {
@@ -325,87 +355,195 @@ private struct TerminalBatchRow: View {
         .frame(minHeight: 44)
         .accessibilityLabel(accessibilityLabel)
         .accessibilityAddTraits(.isButton)
+        .popover(isPresented: $showLockedPopover) {
+            lockedPopoverContent
+        }
+        .popover(isPresented: $showPurchasePopover) {
+            purchasePopoverContent
+        }
     }
 
+    private func handleTap() {
+        switch batch.state {
+        case .learn, .resume:
+            onTap?()
+        case .locked:
+            showLockedPopover = true
+        case .purchaseLocked:
+            showPurchasePopover = true
+        case .complete:
+            break // Not tappable
+        }
+    }
+
+    // ── Single-line layout ──
+
     private var singleLineContent: some View {
+        // Dot leader fills the gap between left text and the marker.
+        // Reserve 1 space before the marker so a dot never sits flush against it.
         let leaderBudget = max(0, columns - fixedColumns)
-        let dotCount = leaderBudget > 0 ? (leaderBudget + 1) / 2 : 0
+        let dotBudget = max(0, leaderBudget - 1)
+        let dotCount = dotBudget > 0 ? (dotBudget + 1) / 2 : 0
         let dotsColumns = dotCount > 0 ? dotCount * 2 - 1 : 0
-        let trailingPad = leaderBudget - dotsColumns
+        let innerPad = dotBudget - dotsColumns  // 0 or 1 parity leftover absorbed into dots
         let leaderText = dotCount > 0
             ? Array(repeating: ".", count: dotCount).joined(separator: " ")
-                + String(repeating: " ", count: trailingPad)
+                + String(repeating: " ", count: innerPad) + " "  // +1 trailing space gap
             : String(repeating: " ", count: leaderBudget)
 
-        let fullLine = nameString + leaderText + lettersString
+        // Full line as a single string (dim base layer for dots/spacing)
+        let fullLine = leftText + leaderText + markerText
 
         return HStack(alignment: .firstTextBaseline, spacing: 0) {
             Text(fullLine)
                 .terminalStyle(size: DesignSystem.Typography.minDimSize, color: dimColor)
                 .textCase(.uppercase)
                 .fixedSize()
+                // Overlay left text (name + letters) in row color
                 .overlay(alignment: .leading) {
-                    Text(nameString)
-                        .terminalStyle(size: DesignSystem.Typography.minDimSize, color: nameColor)
+                    Text(leftText)
+                        .terminalStyle(size: DesignSystem.Typography.minDimSize, color: rowColor)
                         .textCase(.uppercase)
                         .fixedSize()
                 }
+                // Overlay marker in its color, with blinking caret for actionable states
                 .overlay(alignment: .trailing) {
-                    Text(lettersString)
-                        .terminalStyle(size: DesignSystem.Typography.minDimSize, color: letterColor)
-                        .textCase(.uppercase)
-                        .fixedSize()
+                    markerView
                 }
-
-            trailingGlyph
         }
     }
 
-    // Rule 4: wrap onto two lines, no leader dots.
-    // The 44pt min-height applies to the row as a whole; wrapped lines
-    // sit at normal line spacing (no extra gap).
-    private var wrappedContent: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Line 1: name + letters (no leader — it connects nothing across lines)
-            HStack(alignment: .firstTextBaseline, spacing: 0) {
-                Text(nameString)
-                    .terminalStyle(size: DesignSystem.Typography.minDimSize, color: nameColor)
-                    .textCase(.uppercase)
-                    .lineLimit(nil)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(batch.lettersDisplay)
-                    .terminalStyle(size: DesignSystem.Typography.minDimSize, color: letterColor)
-                    .textCase(.uppercase)
-                    .lineLimit(nil)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            // Line 2: glyph right-aligned
-            HStack(spacing: 0) {
-                Spacer(minLength: 0)
-                trailingGlyph
-            }
+    // ── Marker rendering ──
+    // For [LEARN >] and [RESUME >], the ">" blinks while the rest stays steady.
+    // For all other markers, the full text renders steady.
+
+    /// The steady text before the blinking ">" in actionable markers.
+    private var caretSteadyPrefix: String {
+        switch batch.state {
+        case .learn:  return "[LEARN "
+        case .resume: return "[RESUME "
+        default:      return ""
         }
     }
 
     @ViewBuilder
-    private var trailingGlyph: some View {
-        switch batch.state {
-        case .active:
-            BlinkingChevron(tappableColor: tappableColor, reduceMotion: reduceMotion)
-        case .locked:
-            Text("!")
-                .terminalStyle(size: DesignSystem.Typography.minDimSize, color: tappableColor)
+    private var markerView: some View {
+        if hasBlinkingCaret {
+            // Split: steady prefix + blinking ">" + steady "]"
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
+                Text(caretSteadyPrefix)
+                    .terminalStyle(size: DesignSystem.Typography.minDimSize, color: markerColor)
+                    .textCase(.uppercase)
+                    .fixedSize()
+                blinkingCaret
+                Text("]")
+                    .terminalStyle(size: DesignSystem.Typography.minDimSize, color: markerColor)
+                    .textCase(.uppercase)
+                    .fixedSize()
+            }
+        } else {
+            Text(markerText)
+                .terminalStyle(size: DesignSystem.Typography.minDimSize, color: markerColor)
+                .textCase(.uppercase)
                 .fixedSize()
-                .accessibilityLabel("locked — tap to unlock")
         }
+    }
+
+    /// The ">" caret that blinks inside actionable markers.
+    /// Respects Reduce Motion: shows steady when motion is reduced.
+    private var blinkingCaret: some View {
+        Group {
+            if reduceMotion {
+                Text(">")
+                    .terminalStyle(size: DesignSystem.Typography.minDimSize, color: markerColor)
+                    .fixedSize()
+            } else {
+                TimelineView(.periodic(from: .now, by: DesignSystem.Blink.phaseSeconds)) { ctx in
+                    let tick = Int(ctx.date.timeIntervalSinceReferenceDate / DesignSystem.Blink.phaseSeconds)
+                    Text(">")
+                        .terminalStyle(size: DesignSystem.Typography.minDimSize, color: markerColor)
+                        .fixedSize()
+                        .opacity(tick % 2 == 0 ? 1 : 0)
+                }
+            }
+        }
+    }
+
+    // ── Wrapped layout (Rule 4) ──
+    // Two lines, no leader dots. Name + letters on line 1, marker right-aligned on line 2.
+
+    private var wrappedContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
+                Text(nameString)
+                    .terminalStyle(size: DesignSystem.Typography.minDimSize, color: rowColor)
+                    .textCase(.uppercase)
+                    .lineLimit(nil)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(batch.lettersDisplay)
+                    .terminalStyle(size: DesignSystem.Typography.minDimSize, color: rowColor)
+                    .textCase(.uppercase)
+                    .lineLimit(nil)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            HStack(spacing: 0) {
+                Spacer(minLength: 0)
+                if hasBlinkingCaret {
+                    markerView
+                } else {
+                    Text(markerText)
+                        .terminalStyle(size: DesignSystem.Typography.minDimSize, color: markerColor)
+                        .textCase(.uppercase)
+                        .fixedSize()
+                }
+            }
+        }
+    }
+
+    // ── Popover content (stubs) ──
+
+    private var lockedPopoverContent: some View {
+        VStack(spacing: 12) {
+            Text("BATCH LOCKED")
+                .font(.headline)
+            Text("Complete the previous batch first to unlock this one.")
+                .font(.body)
+                .multilineTextAlignment(.center)
+            Button("OK") { showLockedPopover = false }
+                .buttonStyle(.borderedProminent)
+        }
+        .padding()
+        .presentationCompactAdaptation(.popover)
+    }
+
+    private var purchasePopoverContent: some View {
+        VStack(spacing: 12) {
+            Text("UNLOCK ALL BATCHES")
+                .font(.headline)
+            Text("Batches 2–7 require a one-time purchase to unlock.")
+                .font(.body)
+                .multilineTextAlignment(.center)
+            Button("Unlock — $4.99") { showPurchasePopover = false }
+                .buttonStyle(.borderedProminent)
+            Button("Not now") { showPurchasePopover = false }
+                .buttonStyle(.bordered)
+        }
+        .padding()
+        .presentationCompactAdaptation(.popover)
     }
 
     private var accessibilityLabel: String {
         switch batch.state {
-        case .active:
-            return "Batch \(batch.number), \(batch.lettersDisplay), start batch"
+        case .complete:
+            return "Batch \(batch.number), \(batch.lettersDisplay), complete"
+        case .learn:
+            return "Batch \(batch.number), \(batch.lettersDisplay), learn"
+        case .resume:
+            return "Batch \(batch.number), \(batch.lettersDisplay), resume"
         case .locked:
-            return "Batch \(batch.number), locked — tap to unlock"
+            return "Batch \(batch.number), \(batch.lettersDisplay), locked"
+        case .purchaseLocked:
+            return "Batch \(batch.number), \(batch.lettersDisplay), purchase required"
         }
     }
 }
@@ -1075,7 +1213,13 @@ private struct RuleSpecimenSheet: View {
 
 // MARK: - Preview data (static, not wired to NATOData)
 
-private enum BatchState { case active, locked }
+private enum BatchState {
+    case complete       // Finished. Dim, not tappable.
+    case learn          // Available, not started. Bright, tappable.
+    case resume         // In progress. Bright, tappable.
+    case locked         // Previous batch not done. Dim, tappable (explainer).
+    case purchaseLocked // Not purchased. Dim, tappable (paywall).
+}
 
 private struct PreviewBatch: Identifiable {
     let id: Int
@@ -1085,14 +1229,18 @@ private struct PreviewBatch: Identifiable {
 }
 
 private enum PreviewData {
+    // Visual test mix — shows all marker states for design review.
+    // NOT a real app state: in the real app a given moment would show
+    // either [LOCKED] or [$ LOCKED] but not both; this mix previews
+    // all markers at once.
     static let batches: [PreviewBatch] = [
-        PreviewBatch(id: 1, lettersDisplay: "ABCD", state: .active),
-        PreviewBatch(id: 2, lettersDisplay: "EFGH", state: .locked),
+        PreviewBatch(id: 1, lettersDisplay: "ABCD", state: .complete),
+        PreviewBatch(id: 2, lettersDisplay: "EFGH", state: .learn),
         PreviewBatch(id: 3, lettersDisplay: "IJKL", state: .locked),
         PreviewBatch(id: 4, lettersDisplay: "MNOP", state: .locked),
-        PreviewBatch(id: 5, lettersDisplay: "QRST", state: .locked),
-        PreviewBatch(id: 6, lettersDisplay: "UVW",  state: .locked),
-        PreviewBatch(id: 7, lettersDisplay: "XYZ",  state: .locked),
+        PreviewBatch(id: 5, lettersDisplay: "QRST", state: .purchaseLocked),
+        PreviewBatch(id: 6, lettersDisplay: "UVW",  state: .purchaseLocked),
+        PreviewBatch(id: 7, lettersDisplay: "XYZ",  state: .purchaseLocked),
     ]
 }
 
