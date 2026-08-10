@@ -44,6 +44,9 @@ struct DesignPreview: View {
 
     @State private var selectedTab: PreviewTab = .learn
     @State private var showSysSheet = false
+    // TEMPORARY preview-only: present BriefingView from Batch 1 row.
+    // Replace with real app navigation when prototype is wired to AppState.
+    @State private var showBriefingPreview = false
 
     // Preview overrides — nil means "use system value"
     var overrideHighContrast: Bool? = nil
@@ -94,7 +97,8 @@ struct DesignPreview: View {
                                 columns: cols,
                                 dimColor: dimColor,
                                 tappableColor: tappableColor,
-                                reduceMotion: isReduceMotion
+                                reduceMotion: isReduceMotion,
+                                onBatch1Tap: { showBriefingPreview = true }
                             )
                         case .drill:
                             PlaceholderContent(
@@ -121,6 +125,18 @@ struct DesignPreview: View {
                 }
             }
         }
+        // TEMPORARY preview-only: present BriefingView for visual review.
+        // No "seen" flag — presents every tap. Replace with real navigation later.
+        .fullScreenCover(isPresented: $showBriefingPreview) {
+            BriefingView(
+                onBegin: { showBriefingPreview = false },
+                overrideReduceMotion: overrideReduceMotion
+            )
+        }
+        // Disable the cover's slide-up transition under Reduce Motion
+        .transaction { t in
+            if isReduceMotion { t.disablesAnimations = true }
+        }
     }
 }
 
@@ -131,6 +147,8 @@ private struct LearnContent: View {
     let dimColor: Color
     let tappableColor: Color
     let reduceMotion: Bool
+    // TEMPORARY preview-only: callback when Batch 1 row is tapped.
+    var onBatch1Tap: (() -> Void)? = nil
 
     var body: some View {
         ScreenHeader(title: "LEARNING PROTOCOL", columns: columns, dimColor: dimColor)
@@ -143,7 +161,8 @@ private struct LearnContent: View {
                         columns: columns,
                         dimColor: dimColor,
                         tappableColor: tappableColor,
-                        reduceMotion: reduceMotion
+                        reduceMotion: reduceMotion,
+                        onTap: batch.id == 1 ? onBatch1Tap : nil
                     )
                     .padding(.vertical, 10)
                 }
@@ -278,6 +297,8 @@ private struct TerminalBatchRow: View {
     let dimColor: Color
     let tappableColor: Color
     let reduceMotion: Bool
+    // TEMPORARY preview-only: optional tap handler for navigation.
+    var onTap: (() -> Void)? = nil
 
     private var isActive: Bool { batch.state == .active }
     private var nameColor: Color   { isActive ? tappableColor : dimColor }
@@ -292,7 +313,7 @@ private struct TerminalBatchRow: View {
     }
 
     var body: some View {
-        Button(action: {}) {
+        Button(action: { onTap?() }) {
             if fixedColumns <= columns {
                 singleLineContent
             } else {

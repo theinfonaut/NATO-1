@@ -7,10 +7,17 @@ import SwiftUI
 
 struct LearnHomeView: View {
     @ObservedObject var appState = AppState.shared
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var selectedBatch: Batch?
     @State private var savedSession: LearningSessionState?
     @State private var showingResumeSession = false
     @State private var showingSettings = false
+    @State private var showingBriefing = false
+
+    private static let briefingSeenKey = "nato1.briefingSeen"
+    private var briefingSeen: Bool {
+        UserDefaults.standard.bool(forKey: Self.briefingSeenKey)
+    }
 
     var body: some View {
         NavigationStack {
@@ -31,8 +38,12 @@ struct LearnHomeView: View {
                                 batch: batch,
                                 status: batchStatus(for: batch),
                                 onTap: {
-                                    if batchStatus(for: batch) == .available ||
-                                       batchStatus(for: batch) == .inProgress {
+                                    let status = batchStatus(for: batch)
+                                    guard status == .available || status == .inProgress else { return }
+                                    // First-ever Batch 1 tap: show briefing instead
+                                    if batch.id == 0 && !briefingSeen {
+                                        showingBriefing = true
+                                    } else {
                                         selectedBatch = batch
                                     }
                                 }
@@ -76,6 +87,20 @@ struct LearnHomeView: View {
                         LearningSessionView(batch: batch, savedState: session)
                     }
                 }
+            }
+            .fullScreenCover(isPresented: $showingBriefing) {
+                BriefingView(onBegin: {
+                    UserDefaults.standard.set(true, forKey: Self.briefingSeenKey)
+                    showingBriefing = false
+                    // After briefing dismisses, open Batch 1
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        selectedBatch = NATOData.batches[0]
+                    }
+                })
+            }
+            // Disable the cover's slide-up transition under Reduce Motion
+            .transaction { t in
+                if reduceMotion { t.disablesAnimations = true }
             }
         }
     }
