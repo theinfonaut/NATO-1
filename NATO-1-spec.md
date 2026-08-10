@@ -293,7 +293,7 @@ Not yet designed. Revisit when Drill and Codex get real layouts.
 
 Top to bottom: app identity line; screen header (dashed rule, bold centered `LEARNING PROTOCOL` with flanking dashes to the edges, dashed rule); seven batch rows; tab bar.
 
-Batch row: `BATCH N` + dim dotted leader + letters (unspaced, e.g. `ABCD`) + trailing glyph. Active batch is bright with a blinking `>`; locked batches are dim with a bright `!`. Leader dots are always dim, period + single space, and stay phase-aligned across rows (remainder padding trails; the leader ends on a period).
+Batch row: `BATCH N` + letters + dim dotted leader + right-aligned status marker. Five states with distinct markers; see "Learn Tab — Batch Rows" section below for full rules.
 
 Tab bar: `[LEARN] [DRILL] [CODEX]` distributed edge to edge. The active tab is a dim-fill chip with no horizontal padding (fill hugs the character cells exactly, like inverse video). All-caps chips need slightly more top than bottom vertical padding for optical centering, scaled with type size. Light haptic on tab switch.
 
@@ -314,6 +314,47 @@ A single bright line under the Learn header showing the ONE most important next 
 #### Undesigned Learn-tab states [OPEN]
 
 States the status line and a new row state must cover: session in progress; batch complete → next unlocked (needs a "done" row state + glyph — rows are currently only active or locked); reviews due; paywall; all complete; the old settings gear and progress indicator.
+
+### Learn Tab — Batch Rows
+
+Status: DECIDED (pop-over copy and design still OPEN)
+
+Each batch row shows per-batch status via a right-aligned marker. Progress lives on the rows (distributed, all visible at once); the status line carries only the single next action (see Status Line section).
+
+#### State rules (decisions)
+
+Five row states:
+
+- COMPLETE — batch finished. Bare text, no brackets. Dim. Not tappable.
+- [LEARN >] — available, not started. Bright. Tapping starts the batch.
+- [RESUME >] — in progress. Bright. Tapping resumes where the user left off.
+- [LOCKED] — locked because the previous batch isn't finished (sequence lock). Dim. Tappable only to show an explainer pop-over.
+- [$ LOCKED] — locked because the app isn't purchased. Dim. Tappable only to show a pop-over leading to the paywall/unlock.
+
+Sequential unlock: a batch must be finished before the next is reachable. This is a content dependency, not cosmetic — the encode / spell-out activities assume all prior letters are already known, so batches cannot be taken out of order.
+
+The two lock reasons are distinct and must not be conflated. In the real app a batch shows either [LOCKED] or [$ LOCKED], never both at once. (The prototype shows a mix of both only for visual testing of all markers on one screen.)
+
+Free/paid boundary: Batch 1 is free; Batches 2–7 are behind the one-time IAP.
+
+Affordance rules:
+- Brackets mean "tappable." COMPLETE is the only bare marker.
+- Bright = the currently actionable batch (only [LEARN >] and [RESUME >]). COMPLETE and both LOCKED states are dim.
+- Locked rows are tappable, but the tap only surfaces an explainer — not the primary affordance, so the row still reads as dim/locked.
+- The two locked pop-overs have different content: sequence rule vs. purchase.
+- Actionable markers ([LEARN >], [RESUME >]) have a blinking ">" caret (caret blinks, brackets and word steady); respects Reduce Motion (steady, no blink).
+
+Batch-row status is a DIFFERENT axis than letter-mastery tier (Learning / Familiar / Confident / Mastered in the Codebook). A batch is COMPLETE when its learn loop is done, regardless of how mastered its individual letters are. The two must not share visual vocabulary.
+
+#### Dot-leader rendering (implementation note)
+
+The row has three parts: left (BATCH # + letters), a dot leader, and the right-aligned marker. The leader fills the space between the letters and the marker.
+
+The leader budget is computed from the marker's ACTUAL width and the screen's measured column count (from the GeometryReader) — NOT a fixed-width slug. Dot count varies by marker width, letter count, and Dynamic Type together. There is always exactly one space before the marker (a dot never sits flush against the bracket); any parity leftover goes into the dot packing, not the gap.
+
+Note to future-self: do NOT hardcode dot counts and do NOT pad markers to a fixed width — an earlier version did both and it broke the elastic fill. Because the column count comes from the GeometryReader, Dynamic Type / accessibility sizing flows through automatically; keep it that way.
+
+OPEN: the two locked pop-overs (sequence-lock and unpaid-lock) are not yet designed — copy and layout TBD.
 
 #### Batch 1 explainer (first run) [OPEN]
 

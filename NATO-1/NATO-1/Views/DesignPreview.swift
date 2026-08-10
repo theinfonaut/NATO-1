@@ -150,27 +150,150 @@ private struct LearnContent: View {
     // TEMPORARY preview-only: callback when Batch 1 row is tapped.
     var onBatch1Tap: (() -> Void)? = nil
 
+    // TEMPORARY preview-only: cycle through prompt states on tap.
+    @State private var promptStateIndex = 0
+
     var body: some View {
         ScreenHeader(title: "LEARNING PROTOCOL", columns: columns, dimColor: dimColor)
 
-        ScrollView {
-            VStack(spacing: 0) {
-                ForEach(PreviewData.batches) { batch in
-                    TerminalBatchRow(
-                        batch: batch,
-                        columns: columns,
-                        dimColor: dimColor,
-                        tappableColor: tappableColor,
-                        reduceMotion: reduceMotion,
-                        // TEMPORARY: wire briefing preview to the [LEARN] batch
-                        onTap: batch.state == .learn ? onBatch1Tap : nil
-                    )
-                    .padding(.vertical, 10)
+        // Shared blink clock: one time source owns Reduce Motion and
+        // provides caretColor (dim↔bright) to all carets on this tab.
+        BlinkClock(
+            brightColor: tappableColor,
+            dimColor: dimColor,
+            reduceMotion: reduceMotion
+        ) { caretColor in
+            // Next-step prompt sits between the header and the batch list.
+            NextStepPrompt(
+                state: NextStepPrompt.State.allCases[promptStateIndex],
+                columns: columns,
+                dimColor: dimColor,
+                tappableColor: tappableColor,
+                caretColor: caretColor,
+                // TEMPORARY preview-only: cycle to next state on tap.
+                // NOT the real behavior — real behavior will deep-link into the action.
+                onTap: {
+                    promptStateIndex = (promptStateIndex + 1) % NextStepPrompt.State.allCases.count
                 }
+            )
+
+            // Rule separating prompt from batch list
+            DashedRule(columns: columns, color: dimColor)
+
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(PreviewData.batches) { batch in
+                        TerminalBatchRow(
+                            batch: batch,
+                            columns: columns,
+                            dimColor: dimColor,
+                            tappableColor: tappableColor,
+                            caretColor: caretColor,
+                            // TEMPORARY: wire briefing preview to the [LEARN] batch
+                            onTap: batch.state == .learn ? onBatch1Tap : nil
+                        )
+                        .padding(.vertical, 10)
+                    }
+                }
+                .padding(.top, 12)
+                .padding(.bottom, 16)
             }
-            .padding(.top, 12)
-            .padding(.bottom, 16)
         }
+    }
+}
+
+// MARK: - Next-step prompt
+
+private struct NextStepPrompt: View {
+    let state: State
+    let columns: Int
+    let dimColor: Color
+    let tappableColor: Color
+    /// Current caret color from the shared BlinkClock (dim↔bright).
+    let caretColor: Color
+    var onTap: (() -> Void)? = nil
+
+    // TEMPORARY design-review toggle. When true, the ">" caret in the
+    // prompt blinks (via the shared clock's caretColor). When false,
+    // the prompt caret stays steady at bright regardless of the clock.
+    private let promptCaretBlinks = true
+
+    enum State: CaseIterable {
+        case beginBatch1
+        case resumeBatch3
+        case drillDue
+        case beginBatch4
+        case unlock
+        case allClear
+    }
+
+    // ── Content for each state ──
+    // All states are single-line. ALL CLEAR joins action + detail
+    // with a middle dot "·" separator.
+
+    private var displayText: String {
+        switch state {
+        case .beginBatch1:  return "> BEGIN BATCH 1"
+        case .resumeBatch3: return "> RESUME BATCH 3"
+        case .drillDue:     return "> DRILL [6 DUE]"
+        case .beginBatch4:  return "> BEGIN BATCH 4"
+        case .unlock:       return "> UNLOCK FULL ALPHABET"
+        case .allClear:     return "ALL CLEAR · NEXT DRILL IN 3H 20M"
+        }
+    }
+
+    /// Whether this state is actionable (bright, with ">" caret).
+    private var isActionable: Bool { state != .allClear }
+
+    /// The ">" prefix for actionable states, used for caret rendering.
+    private var caretPrefix: String { "> " }
+
+    /// The text after the ">" caret for actionable states.
+    private var textAfterCaret: String {
+        String(displayText.dropFirst(caretPrefix.count))
+    }
+
+    /// Resolved caret color: follows shared clock when toggle is on,
+    /// otherwise stays steady at bright.
+    private var resolvedCaretColor: Color {
+        promptCaretBlinks ? caretColor : tappableColor
+    }
+
+    var body: some View {
+        Button(action: { onTap?() }) {
+            if isActionable {
+                actionableContent
+            } else {
+                // ALL CLEAR — dim, no caret, centered
+                Text(displayText)
+                    .terminalStyle(size: DesignSystem.Typography.minDimSize, color: dimColor)
+                    .textCase(.uppercase)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity)
+            }
+        }
+        .buttonStyle(.plain)
+        .contentShape(Rectangle())
+        .frame(minHeight: 44)
+        .padding(.vertical, 8)
+    }
+
+    // ── Actionable content with ">" caret, centered ──
+
+    private var actionableContent: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 0) {
+            Text(caretPrefix)
+                .terminalStyle(size: DesignSystem.Typography.minDimSize, color: resolvedCaretColor)
+                .fixedSize()
+
+            Text(textAfterCaret)
+                .terminalStyle(size: DesignSystem.Typography.minDimSize, color: tappableColor)
+                .textCase(.uppercase)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity)
     }
 }
 
@@ -297,7 +420,8 @@ private struct TerminalBatchRow: View {
     let columns: Int
     let dimColor: Color
     let tappableColor: Color
-    let reduceMotion: Bool
+    /// Current caret color from the shared BlinkClock (dim↔bright).
+    let caretColor: Color
     // TEMPORARY preview-only: optional tap handler for navigation.
     var onTap: (() -> Void)? = nil
 
@@ -450,23 +574,12 @@ private struct TerminalBatchRow: View {
     }
 
     /// The ">" caret that blinks inside actionable markers.
-    /// Respects Reduce Motion: shows steady when motion is reduced.
+    /// Color oscillates dim↔bright via the shared BlinkClock;
+    /// Reduce Motion is handled by the clock (steady bright).
     private var blinkingCaret: some View {
-        Group {
-            if reduceMotion {
-                Text(">")
-                    .terminalStyle(size: DesignSystem.Typography.minDimSize, color: markerColor)
-                    .fixedSize()
-            } else {
-                TimelineView(.periodic(from: .now, by: DesignSystem.Blink.phaseSeconds)) { ctx in
-                    let tick = Int(ctx.date.timeIntervalSinceReferenceDate / DesignSystem.Blink.phaseSeconds)
-                    Text(">")
-                        .terminalStyle(size: DesignSystem.Typography.minDimSize, color: markerColor)
-                        .fixedSize()
-                        .opacity(tick % 2 == 0 ? 1 : 0)
-                }
-            }
-        }
+        Text(">")
+            .terminalStyle(size: DesignSystem.Typography.minDimSize, color: caretColor)
+            .fixedSize()
     }
 
     // ── Wrapped layout (Rule 4) ──
@@ -548,29 +661,29 @@ private struct TerminalBatchRow: View {
     }
 }
 
-// MARK: - Blinking chevron
+// MARK: - Shared blink clock
 
-private struct BlinkingChevron: View {
-    let tappableColor: Color
+/// Single shared time source for all blinking carets on the Learn tab.
+/// Owns the Reduce Motion check: when Reduce Motion is on, reports a fixed
+/// bright (steady) state — individual carets never check Reduce Motion
+/// themselves. Carets blink dim↔bright (never fully hidden).
+private struct BlinkClock<Content: View>: View {
+    let brightColor: Color
+    let dimColor: Color
     let reduceMotion: Bool
+    @ViewBuilder let content: (_ caretColor: Color) -> Content
 
     var body: some View {
         if reduceMotion {
-            glyphView(visible: true)
+            // Reduce Motion: all carets rest steady at bright
+            content(brightColor)
         } else {
             TimelineView(.periodic(from: .now, by: DesignSystem.Blink.phaseSeconds)) { ctx in
                 let tick = Int(ctx.date.timeIntervalSinceReferenceDate / DesignSystem.Blink.phaseSeconds)
-                glyphView(visible: tick % 2 == 0)
+                let color = tick % 2 == 0 ? brightColor : dimColor
+                content(color)
             }
         }
-    }
-
-    private func glyphView(visible: Bool) -> some View {
-        Text(">")
-            .terminalStyle(size: DesignSystem.Typography.minDimSize, color: tappableColor)
-            .fixedSize()
-            .opacity(visible ? 1 : 0)
-            .accessibilityLabel("start batch")
     }
 }
 
