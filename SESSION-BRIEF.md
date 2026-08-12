@@ -71,6 +71,100 @@ mechanical.
   possible upgrade over the plain dim/bright pulse; letter-sweep as a possible
   state-arrival transition. Both deferred; both must respect Reduce Motion.
 - Still-to-design sections: Learn sub-pages, Drill pages, Codex.
+- Push a new TestFlight build once the port lands. NOTE THE DEPENDENCY: the
+  redesign lives in DesignPreview.swift, separate from the functional app, so a
+  TestFlight build only carries the new visuals AFTER the port integrates them
+  into the real app. Sequence is port → TestFlight, not parallel. The TestFlight
+  push is the payoff/validation at the end of the porting work — real devices,
+  real testers — not a standalone task.
+
+## Integration mechanics (how the port actually happens)
+
+Two branches off main, OPPOSITE roles — this is the crux:
+- The DESIGN branch (DesignPreview.swift etc.) is a LOOKBOOK / implementation
+  reference. It is NEVER merged. It just shows the target. Keep it alive (and
+  pushed to GitHub) until ALL porting is done, then delete it. It's the reference
+  for every screen, not just Learn.
+- A new INTEGRATION branch, branched FROM main (e.g. `git checkout main` then
+  `git checkout -b redesign-integration`), is where real work happens. Main stays
+  safe and working the whole time. Merge integration BACK to main only when a
+  piece is genuinely done — this merge is clean because the branch is just main
+  plus finished work, not the divergent design branch.
+
+Do NOT merge the design branch into main. It's a reference you read from, not a
+set of changes to apply. Merging it wholesale would drag all the stubbed state /
+missing logic into main at once (the half-broken-app state to avoid).
+
+How Claude Code reads the prototype while working on integration: use
+`git show design-branch:path/to/File.swift` to print the prototype's real,
+already-debugged implementation WITHOUT leaving the integration branch. No file
+copying (goes stale), no re-describing from prose (lossy telephone — re-derives
+solved problems, reintroduces fixed bugs like the leader parity / reflow / caret
+sync). Code ports the proven implementation directly.
+
+Division of reference: SPEC = intent (what's decided and why, what's open — keeps
+Code from reopening settled decisions). DESIGN-BRANCH CODE = implementation (how
+it was actually built). Code uses both.
+
+## Three-screen framing (shapes sequencing)
+
+Each screen has a different job, so they are NOT the same restyle x3:
+- LEARN = the launchpad. Where you go to know what to do next and start. Job:
+  orientation + low-friction initiation. A status-driven list of available next
+  steps + the prompt box surfacing the single top one. Restyle + small logic
+  reconciliation. DO FIRST — designed, establishes the primitives/patterns.
+- DRILL = the metronome. System-initiated (app feeds the right card at the right
+  time); user is responsive, not choosing. Structurally rhymes with Learn so it
+  reuses Learn's primitives; the new work is the paced/responsive FEEL. DO SECOND.
+- CODEX = the trophy room. Not utilitarian — emotional. What's possible →
+  progress → motivation → celebration. Per-letter mastery across the 4 tiers
+  (Learning/Familiar/Confident/Mastered), a different information shape than
+  Learn's next-steps list. NOT YET DESIGNED. This is a from-scratch DESIGN task,
+  not a restyle — sequence it with design work, give it room. DO LAST of the three.
+
+So: Learn + Drill are restyles (port look onto working logic, app stays usable);
+Codex is a ground-up design. Restyles first (prove the process, keep app
+shippable), the Codex design when it can get full attention.
+
+## First concrete move next session (before any building)
+
+Read-only question to Claude Code: does the working app already have a styling
+layer (a colors file, a theme, shared components), or is each screen styled ad
+hoc inline? This one fact decides whether "primitives first" is an easy afternoon
+(drop values into existing theme slots) or a foundation-building session (create
+the theme layer that never existed). Ask before building anything.
+
+## Learn-page restyle: six incremental steps (one commit + check each)
+
+Do this incrementally, NOT all at once. With real-state wiring involved something
+will break; small steps keep each failure isolated and describable. Foundation
+first so nothing gets re-touched. Each step is a commit and a verify.
+
+1. PRIMITIVES, INVISIBLE. Land color tokens, Intel One Mono, grid helpers, caret
+   clock into the working app. Nothing looks different yet. Verify: still builds,
+   runs, looks identical. Safest possible first step — pure addition.
+2. BACKGROUND + TYPE on the Learn screen's existing structure. Will look
+   half-transformed (old layout, new colors/font) — fine, it's a checkpoint on
+   the integration branch, not shippable yet. Verify: colors/font right, no crash.
+3. HEADERS. The NATO-1 ─── [SYS] / LEARNING PROTOCOL block. Verify: matches
+   prototype.
+4. BATCH ROWS, wired to REAL batch data. Row layout + markers + dot leader,
+   showing real states. First step that touches live state = where restyle meets
+   reconciliation. Likely splits into two sub-checkpoints: (a) wire the states
+   the app already has, (b) add the states the design introduced (the
+   inventory-then-decide moment — each divergence gets a conscious
+   restyle-vs-redesign call). Verify with dev tools: reset to different states,
+   confirm each row shows the right marker for real data.
+5. PROMPT BOX, wired to real next-step logic. Verify with dev tools: shows the
+   correct single next action across the real app states.
+6. INTERACTIONS / POLISH. Shared-clock caret blink, taps deep-linking into the
+   right flow, Reduce Motion. Verify on device.
+
+Order rationale: steps 1–3 are pure restyle (no logic, low risk, proves the
+foundation). Steps 4–5 are the real wiring/reconciliation, but by then styling is
+proven — so any bug there is LOGIC not style, which makes it describable ("row
+shows LOCKED when it should show RESUME" vs. "something looks off"). The two kinds
+of failure are separated into different steps.
 
 ## Watch-outs (also in HANDOFF.md)
 
