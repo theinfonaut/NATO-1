@@ -11,7 +11,7 @@ import SwiftUI
 struct NATO_1App: App {
     var body: some Scene {
         WindowGroup {
-            DesignPreview() // TEMPORARY — revert to ContentView() after testing
+            ContentView()
         }
     }
 }

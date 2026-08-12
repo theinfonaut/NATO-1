@@ -226,8 +226,6 @@ extension View {
         let correction = verticalPadding * bias * 0.5
         let topPad = verticalPadding - correction
         let bottomPad = verticalPadding + correction
-        let _ = print("[CHIP] bias=\(bias) correction=\(correction) topPad=\(topPad) bottomPad=\(bottomPad)")
-
         return self
             .terminalStyle(
                 size: DesignSystem.Typography.minDimSize,

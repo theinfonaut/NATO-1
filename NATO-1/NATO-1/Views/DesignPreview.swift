@@ -67,8 +67,6 @@ struct DesignPreview: View {
             let availableWidth = geo.size.width - 2 * DesignSystem.Metrics.minHorizontalMargin
             let cols = DesignSystem.Metrics.columns(fittingWidth: availableWidth)
             let blockWidth = CGFloat(cols) * colWidth
-            let _ = print("[LAYOUT] geo.width=\(geo.size.width) columnWidth=\(colWidth) cols=\(cols) blockWidth=\(blockWidth) availableWidth=\(availableWidth) dynamicType=\(dynamicTypeSize)")
-
             ZStack {
                 DesignSystem.Colors.background.ignoresSafeArea()
 

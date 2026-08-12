@@ -100,3 +100,33 @@ Three layers, by lifespan:
   handoff.
 - **The chat itself** — ephemeral. Everything not promoted into one of the above
   is lost when the window closes. Promote before you close.
+
+## Git rhythm: commit vs. push
+
+Two different jobs — don't conflate them:
+
+- COMMIT often, while working. Each commit is a checkpoint: a known-good state
+  to revert to if Claude Code iterates badly, and the unit of "one change at a
+  time." This is what protects the *work* moment-to-moment. Commit at meaningful
+  milestones with descriptive messages.
+- PUSH at stopping points, for backup. Push copies commits to GitHub; it doesn't
+  add checkpoints. Its job is backup (against losing the machine) and sharing.
+  Until you push, everything since the last push lives only on the laptop.
+
+Rule of thumb: if you're about to close the laptop, step away, or end a session —
+push first. During active back-and-forth, commits alone are enough; pushing every
+few minutes is just noise.
+
+Why it matters: committing saves locally, pushing backs up remotely. An
+uncommitted file is one bad checkout from gone; an un-pushed commit is one laptop
+failure from gone. End every session with `git status` (confirm clean) →
+`git push` (confirm "up to date").
+
+## Claude Code investigations read the current branch
+
+When asking Code a read-only "what's in the codebase" question, it reads the
+checked-out branch's working tree by default — it will NOT check other branches
+unless told to. To compare against another branch, explicitly instruct it to use
+`git show <branch>:<path>` or `git diff <branch>..<current>`, and ask it to cite
+that it read from that branch. (Learned this when a first investigation described
+the current branch when we needed main's baseline.)
