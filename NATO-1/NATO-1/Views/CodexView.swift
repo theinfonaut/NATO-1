@@ -1,38 +1,72 @@
 //
-//  CodebookView.swift
+//  CodexView.swift
 //  NATO-1
 //
 
 import SwiftUI
 
-struct CodebookView: View {
+struct CodexView: View {
     @ObservedObject var appState = AppState.shared
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @State private var showingSettings = false
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 20) {
-                    // Progress summary
-                    progressSummary
+        let _ = dynamicTypeSize
 
-                    // Letter grid
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 100))], spacing: 12) {
-                        ForEach(NATOData.allLetters) { letter in
-                            LetterCard(
-                                letter: letter,
-                                tier: appState.tier(for: String(letter.id)),
-                                isUnlocked: appState.letterProgress[String(letter.id)] != nil
-                            )
+        GeometryReader { geo in
+            let availableWidth = geo.size.width - 2 * DesignSystem.Metrics.minHorizontalMargin
+            let cols = DesignSystem.Metrics.columns(fittingWidth: availableWidth)
+            let blockWidth = CGFloat(cols) * DesignSystem.Metrics.columnWidth
+
+            ZStack {
+                DesignSystem.Colors.background.ignoresSafeArea()
+
+                VStack(spacing: 0) {
+                    // ── Terminal header ──
+                    AppBanner(
+                        columns: cols,
+                        dimColor: DesignSystem.Colors.dim,
+                        tappableColor: DesignSystem.Colors.tappable,
+                        showSysSheet: $showingSettings
+                    )
+                    .padding(.top, 16)
+
+                    ScreenHeader(
+                        title: "CODEX",
+                        columns: cols,
+                        dimColor: DesignSystem.Colors.dim
+                    )
+
+                    // ── Existing content ──
+                    ScrollView {
+                        VStack(spacing: 20) {
+                            // Progress summary
+                            progressSummary
+
+                            // Letter grid
+                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 100))], spacing: 12) {
+                                ForEach(NATOData.allLetters) { letter in
+                                    LetterCard(
+                                        letter: letter,
+                                        tier: appState.tier(for: String(letter.id)),
+                                        isUnlocked: appState.letterProgress[String(letter.id)] != nil
+                                    )
+                                }
+                            }
+
+                            // Tier legend
+                            tierLegend
+                                .padding(.top, 8)
                         }
+                        .padding()
                     }
-
-                    // Tier legend
-                    tierLegend
-                        .padding(.top, 8)
                 }
-                .padding()
+                .frame(width: blockWidth)
+                .frame(maxWidth: .infinity)
             }
-            .navigationTitle("Codebook")
+        }
+        .fullScreenCover(isPresented: $showingSettings) {
+            SettingsView()
         }
     }
 
@@ -189,5 +223,5 @@ struct TierBadge: View {
 }
 
 #Preview {
-    CodebookView()
+    CodexView()
 }

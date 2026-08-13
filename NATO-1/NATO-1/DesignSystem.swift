@@ -52,6 +52,9 @@ enum DesignSystem {
         static func tappable(for contrast: ColorSchemeContrast) -> Color {
             contrast == .increased ? tappableHighContrast : tappable
         }
+
+        /// DOS dialog box shadow — between background and dim.
+        static let shadow = Color(hex: "0A2A12")
     }
 
     // MARK: - Typography

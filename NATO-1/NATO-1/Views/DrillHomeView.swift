@@ -8,53 +8,87 @@ import SwiftUI
 
 struct DrillHomeView: View {
     @ObservedObject var appState = AppState.shared
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var showingDrillSession = false
     @State private var showingEncodePractice = false
+    @State private var showingSettings = false
     @State private var currentTime = Date()
 
     // Timer to refresh the view every second
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                // Subtitle
-                Text("Drill at increasing intervals to encode it into permanent memory.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal)
-                    .padding(.bottom, 24)
+        let _ = dynamicTypeSize
 
-                Spacer()
+        GeometryReader { geo in
+            let availableWidth = geo.size.width - 2 * DesignSystem.Metrics.minHorizontalMargin
+            let cols = DesignSystem.Metrics.columns(fittingWidth: availableWidth)
+            let blockWidth = CGFloat(cols) * DesignSystem.Metrics.columnWidth
 
-                if appState.dueLetterCount > 0 {
-                    dueStateView
-                } else if appState.letterProgress.isEmpty {
-                    emptyStateView
-                } else {
-                    allClearStateView
-                }
+            ZStack {
+                DesignSystem.Colors.background.ignoresSafeArea()
 
-                Spacer()
-            }
-            .padding()
-            .navigationTitle("Drill")
-            .onReceive(timer) { time in
-                currentTime = time
-            }
-            .onAppear {
-                currentTime = Date()
-            }
-            .fullScreenCover(isPresented: $showingDrillSession) {
-                NavigationStack {
-                    DrillSessionView()
+                VStack(spacing: 0) {
+                    // ── Terminal header ──
+                    AppBanner(
+                        columns: cols,
+                        dimColor: DesignSystem.Colors.dim,
+                        tappableColor: DesignSystem.Colors.tappable,
+                        showSysSheet: $showingSettings
+                    )
+                    .padding(.top, 16)
+
+                    ScreenHeader(
+                        title: "DRILL",
+                        columns: cols,
+                        dimColor: DesignSystem.Colors.dim
+                    )
+
+                    // ── Existing content ──
+                    VStack(spacing: 0) {
+                        // Subtitle
+                        Text("Drill at increasing intervals to encode it into permanent memory.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal)
+                            .padding(.bottom, 24)
+
+                        Spacer()
+
+                        if appState.dueLetterCount > 0 {
+                            dueStateView
+                        } else if appState.letterProgress.isEmpty {
+                            emptyStateView
+                        } else {
+                            allClearStateView
+                        }
+
+                        Spacer()
+                    }
+                    .padding()
                 }
+                .frame(width: blockWidth)
+                .frame(maxWidth: .infinity)
             }
-            .fullScreenCover(isPresented: $showingEncodePractice) {
-                NavigationStack {
-                    EncodePracticeView()
-                }
+        }
+        .fullScreenCover(isPresented: $showingSettings) {
+            SettingsView()
+        }
+        .onReceive(timer) { time in
+            currentTime = time
+        }
+        .onAppear {
+            currentTime = Date()
+        }
+        .fullScreenCover(isPresented: $showingDrillSession) {
+            NavigationStack {
+                DrillSessionView()
+            }
+        }
+        .fullScreenCover(isPresented: $showingEncodePractice) {
+            NavigationStack {
+                EncodePracticeView()
             }
         }
     }

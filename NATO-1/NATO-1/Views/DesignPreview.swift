@@ -112,7 +112,7 @@ struct DesignPreview: View {
                             )
                         }
 
-                        TerminalTabBar(
+                        PreviewTabBar(
                             columns: cols,
                             selectedTab: $selectedTab,
                             dimColor: dimColor,
@@ -634,15 +634,17 @@ private struct DOSDialogScreen: View {
     }
 }
 
-// MARK: - Tab bar
+// MARK: - Preview tab bar
 
-private struct TerminalTabBar: View {
+// TerminalTabBar is now the real shared struct in ContentView.swift (uses AppTab).
+// This preview-only version uses PreviewTab and contrast-aware color overrides.
+
+private struct PreviewTabBar: View {
     let columns: Int
     @Binding var selectedTab: PreviewTab
     let dimColor: Color
     let tappableColor: Color
 
-    // Minimum columns: all three labels + 1 space between each pair
     private static let minSingleLineColumns: Int = {
         PreviewTab.allCases.map(\.label.count).reduce(0, +) + (PreviewTab.allCases.count - 1)
     }()

@@ -107,7 +107,7 @@ struct LearnHomeView: View {
                 }
             }
         }
-        .sheet(isPresented: $showingSettings, onDismiss: {
+        .fullScreenCover(isPresented: $showingSettings, onDismiss: {
             // Reload after Settings dismisses — covers Full Reset and any
             // other settings change that invalidates the saved session.
             savedSession = PersistenceManager.shared.loadLearningSession()
