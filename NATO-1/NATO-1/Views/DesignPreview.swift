@@ -148,9 +148,6 @@ private struct LearnContent: View {
     // TEMPORARY preview-only: callback when Batch 1 row is tapped.
     var onBatch1Tap: (() -> Void)? = nil
 
-    // TEMPORARY preview-only: cycle through prompt states on tap.
-    @State private var promptStateIndex = 0
-
     var body: some View {
         ScreenHeader(title: "LEARNING PROTOCOL", columns: columns, dimColor: dimColor)
 
@@ -161,22 +158,8 @@ private struct LearnContent: View {
             dimColor: dimColor,
             reduceMotion: reduceMotion
         ) { caretColor in
-            // Next-step prompt sits between the header and the batch list.
-            NextStepPrompt(
-                state: NextStepPrompt.State.allCases[promptStateIndex],
-                columns: columns,
-                dimColor: dimColor,
-                tappableColor: tappableColor,
-                caretColor: caretColor,
-                // TEMPORARY preview-only: cycle to next state on tap.
-                // NOT the real behavior — real behavior will deep-link into the action.
-                onTap: {
-                    promptStateIndex = (promptStateIndex + 1) % NextStepPrompt.State.allCases.count
-                }
-            )
-
-            // Rule separating prompt from batch list
-            DashedRule(columns: columns, color: dimColor)
+            // Next-step prompt is now the real smart version in LearnHomeView.swift.
+            // This preview only shows batch rows.
 
             ScrollView {
                 VStack(spacing: 0) {
@@ -200,100 +183,8 @@ private struct LearnContent: View {
     }
 }
 
-// MARK: - Next-step prompt
-
-private struct NextStepPrompt: View {
-    let state: State
-    let columns: Int
-    let dimColor: Color
-    let tappableColor: Color
-    /// Current caret color from the shared BlinkClock (dim↔bright).
-    let caretColor: Color
-    var onTap: (() -> Void)? = nil
-
-    // TEMPORARY design-review toggle. When true, the ">" caret in the
-    // prompt blinks (via the shared clock's caretColor). When false,
-    // the prompt caret stays steady at bright regardless of the clock.
-    private let promptCaretBlinks = true
-
-    enum State: CaseIterable {
-        case beginBatch1
-        case resumeBatch3
-        case drillDue
-        case beginBatch4
-        case unlock
-        case allClear
-    }
-
-    // ── Content for each state ──
-    // All states are single-line. ALL CLEAR joins action + detail
-    // with a middle dot "·" separator.
-
-    private var displayText: String {
-        switch state {
-        case .beginBatch1:  return "> BEGIN BATCH 1"
-        case .resumeBatch3: return "> RESUME BATCH 3"
-        case .drillDue:     return "> DRILL [6 DUE]"
-        case .beginBatch4:  return "> BEGIN BATCH 4"
-        case .unlock:       return "> UNLOCK FULL ALPHABET"
-        case .allClear:     return "ALL CLEAR · NEXT DRILL IN 3H 20M"
-        }
-    }
-
-    /// Whether this state is actionable (bright, with ">" caret).
-    private var isActionable: Bool { state != .allClear }
-
-    /// The ">" prefix for actionable states, used for caret rendering.
-    private var caretPrefix: String { "> " }
-
-    /// The text after the ">" caret for actionable states.
-    private var textAfterCaret: String {
-        String(displayText.dropFirst(caretPrefix.count))
-    }
-
-    /// Resolved caret color: follows shared clock when toggle is on,
-    /// otherwise stays steady at bright.
-    private var resolvedCaretColor: Color {
-        promptCaretBlinks ? caretColor : tappableColor
-    }
-
-    var body: some View {
-        Button(action: { onTap?() }) {
-            if isActionable {
-                actionableContent
-            } else {
-                // ALL CLEAR — dim, no caret, centered
-                Text(displayText)
-                    .terminalStyle(size: DesignSystem.Typography.minDimSize, color: dimColor)
-                    .textCase(.uppercase)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity)
-            }
-        }
-        .buttonStyle(.plain)
-        .contentShape(Rectangle())
-        .frame(minHeight: 44)
-        .padding(.vertical, 8)
-    }
-
-    // ── Actionable content with ">" caret, centered ──
-
-    private var actionableContent: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 0) {
-            Text(caretPrefix)
-                .terminalStyle(size: DesignSystem.Typography.minDimSize, color: resolvedCaretColor)
-                .fixedSize()
-
-            Text(textAfterCaret)
-                .terminalStyle(size: DesignSystem.Typography.minDimSize, color: tappableColor)
-                .textCase(.uppercase)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity)
-    }
-}
+// NextStepPrompt is now the real smart version in LearnHomeView.swift.
+// The prototype copy that lived here has been retired.
 
 // MARK: - Placeholder content (Drill / Codex)
 
@@ -309,100 +200,8 @@ private struct PlaceholderContent: View {
     }
 }
 
-// MARK: - App banner
-
-/// Top-of-screen identity line shared across all tabs.
-/// Replaces the old top dashed rule in the header.
-/// NATO-1 ----------- [SYS]
-private struct AppBanner: View {
-    let columns: Int
-    let dimColor: Color
-    let tappableColor: Color
-    @Binding var showSysSheet: Bool
-
-    private static let appName = "NATO-1"
-    private static let sysLabel = "[SYS]"
-    // Fixed columns: app name + 1 space + 1 space + sys label
-    private static let fixedCols = appName.count + 1 + 1 + sysLabel.count
-
-    var body: some View {
-        let dashBudget = max(0, columns - Self.fixedCols)
-        let dashes = String(repeating: "-", count: dashBudget)
-        let bannerText = Self.appName + " " + dashes + " " + Self.sysLabel
-
-        // Render the full line in dim, then overlay the endpoints in their colors.
-        // App name is dim (not tappable); [SYS] is bright (tappable).
-        Button { showSysSheet.toggle() } label: {
-            Text(bannerText)
-                .terminalStyle(size: DesignSystem.Typography.minDimSize, color: dimColor)
-                .fixedSize()
-                .overlay(alignment: .trailing) {
-                    Text(Self.sysLabel)
-                        .terminalStyle(size: DesignSystem.Typography.minDimSize, color: tappableColor)
-                        .fixedSize()
-                }
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("System settings")
-    }
-}
-
-// MARK: - Screen header
-
-/// Per-screen title line + bottom rule. Sits below the app banner.
-private struct ScreenHeader: View {
-    let title: String
-    let columns: Int
-    let dimColor: Color
-
-    private var titleLength: Int { title.count }
-
-    // Title fits with dashes when columns >= title + 2 spaces + at least 2 dashes
-    private var titleFitsWithDashes: Bool { columns >= titleLength + 4 }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Title line — Rule 4 fallback
-            if titleFitsWithDashes {
-                dashedTitleLine
-            } else {
-                // No dashes — title alone, wrapping if needed
-                Text(title)
-                    .font(DesignSystem.Typography.title)
-                    .tracking(DesignSystem.Typography.tracking(for: DesignSystem.Typography.minDimSize))
-                    .foregroundStyle(dimColor)
-                    .lineLimit(nil)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            // Bottom rule
-            Text(String(repeating: "-", count: columns))
-                .terminalStyle(size: DesignSystem.Typography.minDimSize, color: dimColor)
-                .fixedSize()
-        }
-    }
-
-    private var dashedTitleLine: some View {
-        let titleCols = titleLength + 2 // +2 for spaces
-        let dashBudget = max(0, columns - titleCols)
-        let leftDashes = dashBudget / 2
-        let rightDashes = dashBudget - leftDashes // odd remainder goes right
-
-        return HStack(alignment: .firstTextBaseline, spacing: 0) {
-            Text(String(repeating: "-", count: leftDashes) + " ")
-                .terminalStyle(size: DesignSystem.Typography.minDimSize, color: dimColor)
-                .fixedSize()
-            Text(title)
-                .font(DesignSystem.Typography.title)
-                .tracking(DesignSystem.Typography.tracking(for: DesignSystem.Typography.minDimSize))
-                .foregroundStyle(dimColor)
-                .fixedSize()
-            Text(" " + String(repeating: "-", count: rightDashes))
-                .terminalStyle(size: DesignSystem.Typography.minDimSize, color: dimColor)
-                .fixedSize()
-        }
-    }
-}
+// AppBanner and ScreenHeader are defined as shared structs in LearnHomeView.swift.
+// Do not redeclare them here — DesignPreview uses the same shared instances.
 
 // MARK: - Batch row
 
@@ -659,44 +458,13 @@ private struct TerminalBatchRow: View {
     }
 }
 
-// MARK: - Shared blink clock
-
-/// Single shared time source for all blinking carets on the Learn tab.
-/// Owns the Reduce Motion check: when Reduce Motion is on, reports a fixed
-/// bright (steady) state — individual carets never check Reduce Motion
-/// themselves. Carets blink dim↔bright (never fully hidden).
-private struct BlinkClock<Content: View>: View {
-    let brightColor: Color
-    let dimColor: Color
-    let reduceMotion: Bool
-    @ViewBuilder let content: (_ caretColor: Color) -> Content
-
-    var body: some View {
-        if reduceMotion {
-            // Reduce Motion: all carets rest steady at bright
-            content(brightColor)
-        } else {
-            TimelineView(.periodic(from: .now, by: DesignSystem.Blink.phaseSeconds)) { ctx in
-                let tick = Int(ctx.date.timeIntervalSinceReferenceDate / DesignSystem.Blink.phaseSeconds)
-                let color = tick % 2 == 0 ? brightColor : dimColor
-                content(color)
-            }
-        }
-    }
-}
+// BlinkClock is defined in LearnHomeView.swift and shared across all files.
+// Do not redeclare it here — DesignPreview uses the same shared instance.
 
 // MARK: - Dashed rule
 
-private struct DashedRule: View {
-    let columns: Int
-    let color: Color
-
-    var body: some View {
-        Text(String(repeating: "-", count: columns))
-            .terminalStyle(size: DesignSystem.Typography.minDimSize, color: color)
-            .fixedSize()
-    }
-}
+// DashedRule is defined as a shared struct in LearnHomeView.swift.
+// Do not redeclare it here — DesignPreview uses the same shared instance.
 
 // MARK: - DOS dialog
 

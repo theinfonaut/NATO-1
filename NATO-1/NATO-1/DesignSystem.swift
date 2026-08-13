@@ -194,6 +194,33 @@ extension Color {
     }
 }
 
+// MARK: - Time formatting
+
+extension DesignSystem {
+    /// Formats the interval from `now` to a future date as a compact terminal string.
+    /// Examples: "3D 12H", "2H 45M", "12M 30S", "5S", "NOW".
+    /// Shared across Learn and Drill tabs.
+    static func timeUntil(_ date: Date, from now: Date = Date()) -> String {
+        let seconds = max(0, Int(date.timeIntervalSince(now)))
+        if seconds == 0 {
+            return "Now"
+        }
+        let minutes = seconds / 60
+        let hours = minutes / 60
+        let days = hours / 24
+
+        if days > 0 {
+            return "\(days)d \(hours % 24)h"
+        } else if hours > 0 {
+            return "\(hours)h \(minutes % 60)m"
+        } else if minutes > 0 {
+            return "\(minutes)m \(seconds % 60)s"
+        } else {
+            return "\(seconds)s"
+        }
+    }
+}
+
 // MARK: - View modifier helpers
 
 extension View {

@@ -163,23 +163,7 @@ struct DrillHomeView: View {
     // MARK: - Helpers
 
     private func timeUntil(_ date: Date) -> String {
-        let seconds = max(0, Int(date.timeIntervalSince(currentTime)))
-        if seconds == 0 {
-            return "Now"
-        }
-        let minutes = seconds / 60
-        let hours = minutes / 60
-        let days = hours / 24
-
-        if days > 0 {
-            return "\(days)d \(hours % 24)h"
-        } else if hours > 0 {
-            return "\(hours)h \(minutes % 60)m"
-        } else if minutes > 0 {
-            return "\(minutes)m \(seconds % 60)s"
-        } else {
-            return "\(seconds)s"
-        }
+        DesignSystem.timeUntil(date, from: currentTime)
     }
 }
 
